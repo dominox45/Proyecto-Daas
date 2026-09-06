@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/tp2?serverTimezone=UTC
+    username: root
+    password: tu_contraseña_aqui
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
