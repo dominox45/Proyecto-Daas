@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -12,16 +13,22 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 
 @Entity
+@Table(name = "cuentas_financieras")
 @Inheritance(strategy = InheritanceType.JOINED)
 
 public abstract class CuentaFinanciera extends EntidadAuditable {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
+    @Column(unique = true, nullable = false, length = 22)
     private String cbu;
+
+    @Column(unique = true, nullable = false)
     private String alias;
+
+    @Column(precision = 19, scale = 2)
     private BigDecimal saldoOperativo;
 
     @Enumerated(EnumType.STRING)
