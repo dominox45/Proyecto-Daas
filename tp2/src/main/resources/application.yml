@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/tp2?serverTimezone=UTC
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:tp2}?serverTimezone=UTC
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
 
