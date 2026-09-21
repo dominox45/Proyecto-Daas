@@ -1,4 +1,4 @@
-# Sistema Bancario - Proyecto DAAS (TP2 y TP3)
+# Sistema Bancario - Proyecto DAAS
 
 ![Java](https://img.shields.io/badge/Java-25-orange.svg)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-brightgreen.svg)
@@ -40,7 +40,7 @@ El sistema administra las operaciones transaccionales y la estructura de dominio
     * **Spring Data JPA:** Abstracción de persistencia con interfaces de Repositories y al menos dos Query Methods por entidad.
 * **Base de Datos:** MySQL 8.4.11
 * **Contenedores:** Docker Desktop 
-* **Testing:** Pruebas unitarias e integración de comportamientos con JUnit y Mockito para la capa de servicios[cite: 2].
+* **Testing:** Pruebas unitarias e integración de comportamientos con JUnit y Mockito para la capa de servicios.
 
 ---
 
@@ -50,24 +50,57 @@ El esquema relacional garantiza la integridad referencial y resuelve la multipli
 
 ```mermaid
 classDiagram
+    class EntidadAuditable {
+        <<MappedSuperclass>>
+        +LocalDateTime fechaCreacion
+        +LocalDateTime fechaModificacion
+    }
+
     class Cliente {
-        +Long id
-        +String nombre
-        ...
+        +UUID id
+        +String nombre;
+        +String cuil;
+        +String email;
+        +String telefono;
+        +String direccion
     }
 
     class CuentaFinanciera {
         +UUID id
-        +String cbu
-        +String alias
-        ...
+        +String CBU
+        +String Alias
+        +double SaldoOperativo
+        +String Estado
+    }
+
+    class CajaDeAhorro {
+        +BigDecimal tasaInteresAnual
+        +int limiteExtraccionesMensualesSinCosto
+    }
+
+    class CuentaCorriente {
+        +BigDecimal descubiertoAutorizado
+        +BigDecimal costoComisionMantenimientoMensual
     }
 
     class Transaccion {
-        +Long id
+        +UUID id
+        +LocalDateTime fechaHora
         +BigDecimal monto
-        ...
+        +TipoTransaccion tipo
+        +EstadoTransaccion estadoTransaccion
+
+
+
     }
 
-    Cliente "1..*" <--> "1..*" CuentaFinanciera : Co-titularidad
-    CuentaFinanciera "1" --> "0..*" Transaccion : registra
+    EntidadAuditable <|-- Cliente
+    EntidadAuditable <|-- CuentaFinanciera
+    EntidadAuditable <|-- Transaccion
+      
+    Cliente "1" --> "0..*" Cliente : agrupa
+    Cliente "1" --> "1..*" CuentaFinanciera : posee
+    CuentaFinanciera <|-- CajaDeAhorro
+    CuentaFinanciera <|-- CuentaCorriente
+    CuentaFinanciera "1" --> "1..*" Transaccion : registra
+ ```   
