@@ -1,279 +1,399 @@
-Sistema Bancario - Proyecto DAAS
+# 🏦 Sistema Bancario — Proyecto DAAS
 
-Proyecto desarrollado para la asignatura Desarrollo y Arquitecturas Avanzadas de Software de la carrera Ingeniería en Informática de la Universidad Nacional de Jujuy.
+<p align="center">
 
-El proyecto implementa el modelo de dominio y su persistencia mediante JPA/Hibernate sobre MySQL, utilizando Spring Boot.
+**Desarrollo y Arquitecturas Avanzadas de Software**
 
-Tecnologías
-Java 25
-Spring Boot 4.1.1
-Spring Data JPA
-Hibernate ORM
-MySQL 8.4
-Maven
-Lombok
-JUnit
-Estado actual
+Ingeniería en Informática · Universidad Nacional de Jujuy
 
-La implementación actual comprende el modelo de dominio y su configuración de persistencia.
+<br>
 
-Se encuentra configurada y verificada la conexión entre Spring Boot, Hibernate y MySQL 8.4.
+![Java](https://img.shields.io/badge/Java-25-orange?logo=openjdk\&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1.1-brightgreen?logo=springboot\&logoColor=white)
+![Spring Data JPA](https://img.shields.io/badge/Spring%20Data-JPA-6DB33F?logo=spring\&logoColor=white)
+![Hibernate](https://img.shields.io/badge/Hibernate-ORM-59666C?logo=hibernate\&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-8.4.11-4479A1?logo=mysql\&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-Wrapper-C71A36?logo=apachemaven\&logoColor=white)
+![JUnit](https://img.shields.io/badge/JUnit-Testing-25A162?logo=junit5\&logoColor=white)
 
-También se encuentra implementada la auditoría básica mediante Spring Data JPA.
+</p>
 
-Las capas Repository y Service corresponden a etapas posteriores del desarrollo del proyecto.
+---
 
-Modelo de dominio
+## 📌 Descripción
 
-El dominio contempla:
+Proyecto desarrollado para la asignatura **Desarrollo y Arquitecturas Avanzadas de Software** de la carrera **Ingeniería en Informática — Universidad Nacional de Jujuy**.
 
-Clientes.
-Cuentas financieras.
-Cajas de ahorro.
-Cuentas corrientes.
-Transacciones.
-Auditoría de creación y modificación.
+El proyecto modela el núcleo de un **sistema bancario**, aplicando conceptos de:
 
-Las cuentas bancarias utilizan una jerarquía de entidades basada en CuentaFinanciera, con CajaDeAhorro y CuentaCorriente como especializaciones.
+* Programación Orientada a Objetos.
+* Persistencia mediante JPA/Hibernate.
+* Herencia de entidades.
+* Relaciones entre entidades.
+* Auditoría automática.
+* Integridad y restricciones en base de datos.
+* Capas de Repository y Service.
+* Pruebas automatizadas.
 
-La estrategia de herencia JPA utilizada es:
+Actualmente el proyecto se encuentra en evolución a partir de los trabajos prácticos de la asignatura.
 
+---
+
+## 🏦 Dominio del sistema
+
+El sistema representa las principales entidades involucradas en la gestión de cuentas bancarias:
+
+### 👤 Clientes
+
+Permite representar a los clientes de la entidad bancaria mediante sus principales datos identificatorios:
+
+* Nombre / Razón Social
+* CUIL
+* Email
+* Teléfono
+* Dirección
+
+### 💳 Cuentas financieras
+
+Se utiliza una entidad abstracta `CuentaFinanciera` como base para los distintos tipos de cuentas.
+
+Cada cuenta posee:
+
+* Identificador `UUID`
+* CBU
+* Alias
+* Saldo operativo
+* Estado
+* Fecha de creación
+* Fecha de última modificación
+
+Los tipos concretos de cuenta contemplados son:
+
+* **Caja de Ahorro**
+* **Cuenta Corriente**
+
+La herencia JPA se implementa mediante la estrategia:
+
+```text
 InheritanceType.JOINED
+```
 
-Esto se refleja en el esquema generado por Hibernate mediante una tabla para cuentas_financieras y tablas específicas para las especializaciones.
+### 💰 Transacciones
 
-Persistencia JPA
+El dominio contempla operaciones realizadas sobre las cuentas bancarias, incluyendo:
 
-La persistencia se encuentra configurada mediante Spring Data JPA e Hibernate.
+* Depósitos
+* Extracciones
+* Transferencias enviadas
+* Transferencias recibidas
 
-Hibernate genera y actualiza el esquema de la base de datos a partir de las entidades mediante:
+Cada transacción posee información relacionada con su fecha, monto, tipo y estado de procesamiento.
 
-spring:
-jpa:
-hibernate:
-ddl-auto: update
+---
 
-La base de datos utilizada durante el desarrollo es:
+## 🧱 Arquitectura
 
-MySQL 8.4
-Configuración de la base de datos
+La aplicación sigue una arquitectura por capas orientada a separar responsabilidades:
 
-La aplicación no almacena las credenciales de MySQL en el código fuente.
+```text
+┌─────────────────────────────┐
+│          Service            │
+│      Lógica de negocio      │
+└──────────────┬──────────────┘
+               │
+┌──────────────▼──────────────┐
+│         Repository          │
+│      Acceso a datos         │
+└──────────────┬──────────────┘
+               │
+┌──────────────▼──────────────┐
+│       JPA / Hibernate       │
+│        Persistencia ORM     │
+└──────────────┬──────────────┘
+               │
+┌──────────────▼──────────────┐
+│           MySQL             │
+│        Base de datos        │
+└─────────────────────────────┘
+```
 
-La configuración utiliza variables de entorno:
+> La implementación de las capas `Repository` y `Service` corresponde al desarrollo progresivo del proyecto según los trabajos prácticos de la asignatura.
 
-DB_HOST
-DB_PORT
-DB_NAME
-DB_USERNAME
-DB_PASSWORD
+---
 
-Ejemplo para una instalación local:
+## 🛠️ Tecnologías
 
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=tp2
-DB_USERNAME=root
-DB_PASSWORD=<contraseña-local>
-Configuración en PowerShell
+| Tecnología          | Versión / Uso                    |
+| ------------------- | -------------------------------- |
+| **Java**            | 25                               |
+| **Spring Boot**     | 4.1.1                            |
+| **Spring Data JPA** | Persistencia                     |
+| **Hibernate**       | ORM                              |
+| **MySQL**           | 8.4.11                           |
+| **Maven Wrapper**   | Gestión y ejecución del proyecto |
+| **Lombok**          | Reducción de código repetitivo   |
+| **JUnit**           | Testing                          |
 
-Ejemplo:
+---
 
+## 🗄️ Persistencia e integridad
+
+La persistencia se implementa utilizando **JPA/Hibernate** sobre MySQL.
+
+Entre las restricciones actualmente verificadas se encuentran:
+
+* `CBU` obligatorio.
+* `CBU` único.
+* Longitud máxima de CBU de 22 caracteres.
+* `Alias` obligatorio.
+* `Alias` único.
+* Identificadores mediante `UUID`.
+* Herencia mediante estrategia `JOINED`.
+* Relaciones mediante claves foráneas.
+* Fechas de auditoría automáticas.
+
+Por ejemplo, las restricciones de `CBU` y `Alias` se reflejan directamente en el esquema generado por Hibernate:
+
+```text
+cuentas_financieras
+├── id
+├── cbu                 UNIQUE NOT NULL
+├── alias               UNIQUE NOT NULL
+├── saldo_operativo
+├── estado
+├── fecha_creacion
+└── fecha_modificacion
+```
+
+---
+
+## 🕒 Auditoría
+
+Las entidades auditables heredan de:
+
+```java
+EntidadAuditable
+```
+
+Esta clase utiliza:
+
+```java
+@CreatedDate
+@LastModifiedDate
+```
+
+junto con:
+
+```java
+@EnableJpaAuditing
+```
+
+para registrar automáticamente:
+
+* `fechaCreacion`
+* `fechaModificacion`
+
+El comportamiento fue verificado mediante pruebas de integración con Spring Boot y JPA.
+
+---
+
+## 📐 Modelo de dominio
+
+```mermaid
+classDiagram
+
+    class EntidadAuditable {
+        <<MappedSuperclass>>
+        LocalDateTime fechaCreacion
+        LocalDateTime fechaModificacion
+    }
+
+    class Cliente {
+        UUID id
+        String nombre
+        String cuil
+        String email
+        String telefono
+        String direccion
+    }
+
+    class CuentaFinanciera {
+        <<abstract>>
+        UUID id
+        String cbu
+        String alias
+        BigDecimal saldoOperativo
+        EstadoCuenta estado
+    }
+
+    class CajaDeAhorro {
+        BigDecimal tasaInteresAnual
+        int limiteExtraccionesMensualesSinCosto
+    }
+
+    class CuentaCorriente {
+        BigDecimal descubiertoAutorizado
+        BigDecimal costoComisionMantenimientoMensual
+    }
+
+    class Transaccion {
+        UUID id
+        LocalDateTime fechaHora
+        BigDecimal monto
+        TipoTransaccion tipo
+        EstadoTransaccion estado
+    }
+
+    EntidadAuditable <|-- Cliente
+    EntidadAuditable <|-- CuentaFinanciera
+    EntidadAuditable <|-- Transaccion
+
+    CuentaFinanciera <|-- CajaDeAhorro
+    CuentaFinanciera <|-- CuentaCorriente
+
+    Cliente "0..*" --> "0..*" CuentaFinanciera : titularidad
+    CuentaFinanciera "1" --> "0..*" Transaccion : registra
+```
+
+---
+
+## 📂 Estructura del proyecto
+
+```text
+tp2/
+├── src/
+│   ├── main/
+│   │   ├── java/
+│   │   │   └── ar/edu/unju/fi/arquitecturas/tp2/
+│   │   │       ├── model/
+│   │   │       ├── repository/
+│   │   │       ├── service/
+│   │   │       └── Tp2Application.java
+│   │   │
+│   │   └── resources/
+│   │       └── application.yml
+│   │
+│   └── test/
+│       └── java/
+│
+├── pom.xml
+├── mvnw
+├── mvnw.cmd
+└── README.md
+```
+
+---
+
+## ⚙️ Requisitos previos
+
+Antes de ejecutar el proyecto se necesita tener instalado:
+
+* **JDK 25**
+* **MySQL 8.4.x**
+* Git
+
+No es necesario instalar Maven de forma global, ya que el proyecto utiliza **Maven Wrapper**.
+
+---
+
+## 🗃️ Configuración de MySQL
+
+Crear el esquema:
+
+```sql
+CREATE DATABASE tp2;
+```
+
+La aplicación utiliza variables de entorno para evitar almacenar credenciales directamente en el repositorio.
+
+### Windows PowerShell
+
+```powershell
 $env:DB_HOST="localhost"
 $env:DB_PORT="3306"
 $env:DB_NAME="tp2"
 $env:DB_USERNAME="root"
 $env:DB_PASSWORD="TU_CONTRASEÑA"
+```
 
-La contraseña debe mantenerse únicamente en la configuración local del desarrollador y no debe incorporarse al repositorio.
+> ⚠️ La contraseña real de MySQL no debe almacenarse en `application.yml`, README, commits ni en el repositorio remoto.
 
-Creación de la base de datos
+La configuración utiliza:
 
-Antes de ejecutar la aplicación debe existir el esquema tp2.
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST}:${DB_PORT}/${DB_NAME}?serverTimezone=UTC
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
 
-Desde MySQL:
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+```
 
-CREATE DATABASE tp2;
+---
 
-Luego:
+## ▶️ Ejecución
 
-USE tp2;
+Desde la carpeta del proyecto:
 
-Si se desea regenerar completamente el esquema durante el desarrollo, puede eliminarse y recrearse la base:
+### Windows
 
-DROP DATABASE tp2;
-CREATE DATABASE tp2;
-
-Posteriormente Hibernate volverá a generar las tablas al iniciar la aplicación.
-
-Ejecución
-
-Desde el directorio del proyecto:
-
+```powershell
 .\mvnw.cmd spring-boot:run
+```
 
-La aplicación utilizará los valores definidos en las variables de entorno para establecer la conexión con MySQL.
+### Ejecutar las pruebas
 
-Esquema generado
+```powershell
+.\mvnw.cmd test
+```
 
-Actualmente Hibernate genera las siguientes tablas:
+Para ejecutar únicamente las pruebas de auditoría:
 
-cajas_de_ahorro
-clientes
-cuentas_corrientes
-cuentas_financieras
-transacciones
-
-La estrategia JOINED genera las relaciones entre la tabla base y las tablas de las especializaciones.
-
-Por ejemplo:
-
-cuentas_financieras
-│
-├── cuentas_corrientes
-│
-└── cajas_de_ahorro
-
-En cuentas_corrientes, la columna id funciona también como clave foránea hacia cuentas_financieras.
-
-Restricciones de cuentas financieras
-
-Las cuentas financieras definen:
-
-CBU
-Alias
-
-como identificadores únicos.
-
-La entidad utiliza:
-
-@Column(unique = true, nullable = false, length = 22)
-private String cbu;
-
-@Column(unique = true, nullable = false)
-private String alias;
-
-Por lo tanto, Hibernate genera restricciones de integridad para garantizar:
-
-CBU obligatorio.
-CBU único.
-CBU con longitud máxima de 22 caracteres.
-Alias obligatorio.
-Alias único.
-
-Estas restricciones fueron verificadas directamente sobre el esquema generado en MySQL.
-
-Auditoría
-
-Las entidades auditables heredan de:
-
-EntidadAuditable
-
-La clase utiliza:
-
-@MappedSuperclass
-@EntityListeners(AuditingEntityListener.class)
-
-y define:
-
-@CreatedDate
-private LocalDateTime fechaCreacion;
-
-@LastModifiedDate
-private LocalDateTime fechaModificacion;
-
-La aplicación habilita la auditoría mediante:
-
-@EnableJpaAuditing
-
-La funcionalidad fue verificada mediante una prueba de integración que:
-
-Persiste una cuenta.
-Comprueba que fechaCreacion sea registrada.
-Comprueba que fechaModificacion sea registrada.
-Modifica la entidad.
-Ejecuta nuevamente la persistencia.
-Comprueba que la fecha de creación permanezca sin modificaciones.
-
-La prueba se encuentra en:
-
-src/test/java/ar/edu/unju/fi/arquitecturas/tp2/AuditoriaTest.java
-Pruebas
-
-El proyecto cuenta actualmente con una prueba de carga del contexto de Spring:
-
-Tp2ApplicationTests
-
-y una prueba específica de auditoría:
-
-AuditoriaTest
-
-Para ejecutar la prueba de auditoría:
-
+```powershell
 .\mvnw.cmd -Dtest=AuditoriaTest test
+```
 
-Para ejecutar todas las pruebas:
+---
 
-.\mvnw.cmd clean test
+## 🧪 Testing
 
-Un resultado exitoso debe finalizar con:
+El proyecto incorpora pruebas automatizadas para verificar comportamientos de persistencia.
+
+Actualmente se verifica, entre otros aspectos:
+
+* Creación de entidades.
+* Persistencia mediante JPA.
+* Generación automática de fechas de auditoría.
+* Actualización de entidades.
+* Integración entre Spring Boot, JPA, Hibernate y MySQL.
+
+Ejemplo de ejecución:
+
+```text
+Tests run: 1
+Failures: 0
+Errors: 0
+Skipped: 0
 
 BUILD SUCCESS
-Estructura principal
-src/
-├── main/
-│   ├── java/
-│   │   └── ar/
-│   │       └── edu/
-│   │           └── unju/
-│   │               └── fi/
-│   │                   └── arquitecturas/
-│   │                       └── tp2/
-│   │                           ├── model/
-│   │                           └── Tp2Application.java
-│   │
-│   └── resources/
-│       └── application.yml
-│
-└── test/
-└── java/
-└── ar/
-└── edu/
-└── unju/
-└── fi/
-└── arquitecturas/
-└── tp2/
-├── Tp2ApplicationTests.java
-└── AuditoriaTest.java
-Verificación rápida de MySQL
+```
 
-Después de iniciar la aplicación se puede verificar el esquema mediante:
+## 👨‍💻 Autores
 
-USE tp2;
+**Facundo Ezequiel Tolaba Catarí**
+**Maximiliano Luis Esteban Diaz**
 
-SHOW TABLES;
+**Ingeniería en Informática — UNJu**
+**Desarrollo y Arquitecturas Avanzadas de Software · 2026**
 
-Para verificar la estructura de las cuentas financieras:
+---
 
-SHOW CREATE TABLE cuentas_financieras\G
+<p align="center">
 
-Para verificar sus índices:
+**Proyecto académico — DAAS**
 
-SHOW INDEX FROM cuentas_financieras;
-
-Deben existir índices únicos para:
-
-alias
-cbu
-Próximas etapas
-
-El proyecto continuará incorporando las funcionalidades definidas para los siguientes trabajos prácticos.
-
-Entre ellas se encuentran:
-
-Capa Repository.
-Query Methods de Spring Data JPA.
-Capa de Servicios.
-Pruebas unitarias.
-Ampliación y verificación de las relaciones del modelo.
-Co-titularidad entre clientes y cuentas.
+</p>
