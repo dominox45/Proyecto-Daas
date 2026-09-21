@@ -1,6 +1,7 @@
 package ar.edu.unju.fi.arquitecturas.tp2.model;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -14,6 +15,7 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 
 @Entity
+@Table(name = "cajas_de_ahorro")
 
 public class CajaDeAhorro extends CuentaFinanciera {
 

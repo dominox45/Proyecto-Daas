@@ -3,6 +3,8 @@ package ar.edu.unju.fi.arquitecturas.tp2.model;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.UUID;
+
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
@@ -10,13 +12,13 @@ import lombok.*;
 @Setter
 
 @Entity
-@Table(name = "cliente")
+@Table(name = "clientes")
 
 public class Cliente extends EntidadAuditable {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     private String nombre;
     private String cuil;
