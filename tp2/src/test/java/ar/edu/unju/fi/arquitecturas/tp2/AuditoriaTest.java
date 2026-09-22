@@ -38,13 +38,29 @@ class AuditoriaTest {
         assertNotNull(cuenta.getFechaCreacion());
         assertNotNull(cuenta.getFechaModificacion());
 
-        LocalDateTime fechaCreacion = cuenta.getFechaCreacion();
+        entityManager.clear();
 
-        cuenta.setSaldoOperativo(new BigDecimal("1000.00"));
+        CuentaCorriente cuentaPersistida =
+                entityManager.find(CuentaCorriente.class, cuenta.getId());
 
+        assertNotNull(cuentaPersistida);
+
+        LocalDateTime fechaCreacion = cuentaPersistida.getFechaCreacion();
+        LocalDateTime fechaModificacionInicial =
+                cuentaPersistida.getFechaModificacion();
+
+        cuentaPersistida.setSaldoOperativo(new BigDecimal("1000.00"));
         entityManager.flush();
+        entityManager.clear();
 
-        assertEquals(fechaCreacion, cuenta.getFechaCreacion());
-        assertNotNull(cuenta.getFechaModificacion());
+        CuentaCorriente cuentaRecuperada =
+                entityManager.find(CuentaCorriente.class, cuenta.getId());
+
+        assertNotNull(cuentaRecuperada);
+        assertEquals(fechaCreacion, cuentaRecuperada.getFechaCreacion());
+        assertEquals(0, new BigDecimal("1000.00")
+                .compareTo(cuentaRecuperada.getSaldoOperativo()));
+        assertTrue(cuentaRecuperada.getFechaModificacion()
+                .isAfter(fechaModificacionInicial));
     }
 }
