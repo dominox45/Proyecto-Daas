@@ -54,6 +54,11 @@ public class Cliente extends EntidadAuditable {
     @Column(length = 255)
     private String direccion;
 
+    /** Cliente al que este cliente referencia como titular principal. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "titular_id")
+    private Cliente titular;
+
     /** Cuentas financieras de las que el cliente es titular. */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(

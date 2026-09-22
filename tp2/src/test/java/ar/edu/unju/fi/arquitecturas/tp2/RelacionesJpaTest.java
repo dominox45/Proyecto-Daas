@@ -132,4 +132,48 @@ class RelacionesJpaTest {
         assertEquals(transaccionId,
                 cuentaRecuperada.getTransacciones().getFirst().getId());
     }
+    @Test
+    @Transactional
+    void deberiaPersistirRelacionReflexivaEntreClientes() {
+        Cliente juan = new Cliente();
+        juan.setNombre("Juan");
+        juan.setCuil("20333333331");
+
+        Cliente elena = new Cliente();
+        elena.setNombre("Elena");
+        elena.setCuil("27333333332");
+        elena.setTitular(juan);
+
+        Cliente pedro = new Cliente();
+        pedro.setNombre("Pedro");
+        pedro.setCuil("20333333333");
+        pedro.setTitular(juan);
+
+        // Persistimos cada cliente explícitamente: no configuramos cascadas.
+        entityManager.persist(juan);
+        entityManager.persist(elena);
+        entityManager.persist(pedro);
+        entityManager.flush();
+
+        UUID juanId = juan.getId();
+        UUID elenaId = elena.getId();
+        UUID pedroId = pedro.getId();
+
+        // Limpiamos el contexto para verificar lo recuperado desde la BD.
+        entityManager.clear();
+
+        Cliente juanRecuperado = entityManager.find(Cliente.class, juanId);
+        Cliente elenaRecuperada = entityManager.find(Cliente.class, elenaId);
+        Cliente pedroRecuperado = entityManager.find(Cliente.class, pedroId);
+
+        assertNotNull(juanRecuperado);
+        assertNotNull(elenaRecuperada);
+        assertNotNull(pedroRecuperado);
+
+        assertNull(juanRecuperado.getTitular());
+        assertNotNull(elenaRecuperada.getTitular());
+        assertNotNull(pedroRecuperado.getTitular());
+        assertEquals(juanId, elenaRecuperada.getTitular().getId());
+        assertEquals(juanId, pedroRecuperado.getTitular().getId());
+    }
 }
