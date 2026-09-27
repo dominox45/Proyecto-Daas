@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>ar.edu.unju.fi.arquitecturas</groupId>
-    <artifactId>tp2</artifactId>
+    <artifactId>proyecto-daas</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>tp2</name>
-    <description>tp2</description>
+    <name>Proyecto-Daas</name>
+    <description>Sistema bancario desarrollado para Desarrollo y Arquitecturas Avanzadas de Software</description>
     <url/>
     <licenses>
         <license/>

@@ -464,7 +464,7 @@ classDiagram
 
 <h2>📂 Estructura del proyecto</h2>
 
-<pre><code>tp2/ 
+<pre><code>Proyecto-Daas/
 ├── src/ 
 │   ├── main/ 
 │   │   ├── java/ 
@@ -491,7 +491,12 @@ classDiagram
 │   │   │                           │   ├── ClienteRepository.java 
 │   │   │                           │   ├── CuentaCorrienteRepository.java 
 │   │   │                           │   ├── CuentaFinancieraRepository.java 
-│   │   │                           │   └── TransaccionRepository.java 
+│   │   │                           │   └── TransaccionRepository.java
+│   │   │                           │
+│   │   │                           ├── service/
+│   │   │                           │   ├── ClienteService.java
+│   │   │                           │   ├── CuentaFinancieraService.java
+│   │   │                           │   └── TransferenciaService.java
 │   │   │                           │ 
 │   │   │                           └── Tp2Application.java 
 │   │   │ 
