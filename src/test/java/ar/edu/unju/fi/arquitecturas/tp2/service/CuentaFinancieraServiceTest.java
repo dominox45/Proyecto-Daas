@@ -7,6 +7,8 @@ import ar.edu.unju.fi.arquitecturas.tp2.model.enums.EstadoTransaccion;
 import ar.edu.unju.fi.arquitecturas.tp2.model.enums.TipoTransaccion;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.CuentaFinancieraRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.TransaccionRepository;
+import ar.edu.unju.fi.arquitecturas.tp2.service.impl.CuentaFinancieraServiceImpl;
+import ar.edu.unju.fi.arquitecturas.tp2.exception.RecursoNoEncontradoException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -32,7 +34,7 @@ class CuentaFinancieraServiceTest {
     private TransaccionRepository transaccionRepository;
 
     @InjectMocks
-    private CuentaFinancieraService cuentaService;
+    private CuentaFinancieraServiceImpl cuentaService;
 
     @Test
     void deberiaDepositarYRegistrarTransaccion() {
@@ -86,7 +88,7 @@ class CuentaFinancieraServiceTest {
         when(cuentaRepository.findById(cuentaId))
                 .thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(RecursoNoEncontradoException.class,
                 () -> cuentaService.depositar(cuentaId, new BigDecimal("100.00")));
 
         verify(cuentaRepository).findById(cuentaId);

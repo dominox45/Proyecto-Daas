@@ -2,6 +2,7 @@ package ar.edu.unju.fi.arquitecturas.tp2.service;
 
 import ar.edu.unju.fi.arquitecturas.tp2.model.Cliente;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.ClienteRepository;
+import ar.edu.unju.fi.arquitecturas.tp2.service.impl.ClienteServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -23,7 +24,7 @@ class ClienteServiceTest {
     private ClienteRepository clienteRepository;
 
     @InjectMocks
-    private ClienteService clienteService;
+    private ClienteServiceImpl clienteService;
 
     @Test
     void deberiaBuscarClientePorCuil() {

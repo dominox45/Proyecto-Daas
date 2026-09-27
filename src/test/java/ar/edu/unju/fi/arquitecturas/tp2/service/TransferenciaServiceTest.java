@@ -1,4 +1,3 @@
-
 package ar.edu.unju.fi.arquitecturas.tp2.service;
 
 import ar.edu.unju.fi.arquitecturas.tp2.model.CuentaCorriente;
@@ -8,6 +7,8 @@ import ar.edu.unju.fi.arquitecturas.tp2.model.enums.EstadoTransaccion;
 import ar.edu.unju.fi.arquitecturas.tp2.model.enums.TipoTransaccion;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.CuentaFinancieraRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.TransaccionRepository;
+import ar.edu.unju.fi.arquitecturas.tp2.service.impl.TransferenciaServiceImpl;
+import ar.edu.unju.fi.arquitecturas.tp2.exception.RecursoNoEncontradoException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -33,7 +34,7 @@ class TransferenciaServiceTest {
     private TransaccionRepository transaccionRepository;
 
     @InjectMocks
-    private TransferenciaService transferenciaService;
+    private TransferenciaServiceImpl transferenciaService;
 
     @Test
     void deberiaTransferirYRegistrarAmbosMovimientos() {
@@ -128,5 +129,48 @@ class TransferenciaServiceTest {
                         cuentaId, cuentaId, new BigDecimal("100.00")));
 
         verifyNoInteractions(cuentaRepository, transaccionRepository);
+    }
+
+    @Test
+    void deberiaRechazarTransferenciaCuandoCuentaOrigenNoExiste() {
+        UUID origenId = UUID.randomUUID();
+        UUID destinoId = UUID.randomUUID();
+
+        when(cuentaRepository.findById(origenId))
+                .thenReturn(Optional.empty());
+
+        assertThrows(RecursoNoEncontradoException.class,
+                () -> transferenciaService.transferir(
+                        origenId, destinoId, new BigDecimal("100.00")));
+
+        verify(cuentaRepository).findById(origenId);
+        verify(cuentaRepository, never()).findById(destinoId);
+        verify(cuentaRepository, never()).save(any());
+        verifyNoInteractions(transaccionRepository);
+    }
+
+    @Test
+    void deberiaRechazarTransferenciaCuandoCuentaDestinoNoExiste() {
+        UUID origenId = UUID.randomUUID();
+        UUID destinoId = UUID.randomUUID();
+
+        CuentaCorriente origen = new CuentaCorriente();
+        origen.setEstado(EstadoCuenta.ACTIVA);
+        origen.setSaldoOperativo(new BigDecimal("1000.00"));
+
+        when(cuentaRepository.findById(origenId))
+                .thenReturn(Optional.of(origen));
+
+        when(cuentaRepository.findById(destinoId))
+                .thenReturn(Optional.empty());
+
+        assertThrows(RecursoNoEncontradoException.class,
+                () -> transferenciaService.transferir(
+                        origenId, destinoId, new BigDecimal("100.00")));
+
+        verify(cuentaRepository).findById(origenId);
+        verify(cuentaRepository).findById(destinoId);
+        verify(cuentaRepository, never()).save(any());
+        verifyNoInteractions(transaccionRepository);
     }
 }
