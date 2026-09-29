@@ -44,7 +44,7 @@ public class GlobalExceptionHandler {
      *
      * @param ex      Excepción capturada.
      * @param request Petición HTTP original.
-     * @return ResponseEntity con estado 400 (Bad Request) y el detalle del saldo.
+     * @return ResponseEntity con estado 409 (CONFLICT) y el detalle del saldo.
      */
     @ExceptionHandler(SaldoInsuficienteException.class)
     public ResponseEntity<ErrorResponse> handleSaldoInsuficiente(
