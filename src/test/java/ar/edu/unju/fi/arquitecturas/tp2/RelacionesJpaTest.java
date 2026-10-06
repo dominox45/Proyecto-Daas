@@ -2,25 +2,25 @@ package ar.edu.unju.fi.arquitecturas.tp2;
 
 import ar.edu.unju.fi.arquitecturas.tp2.model.CajaDeAhorro;
 import ar.edu.unju.fi.arquitecturas.tp2.model.Cliente;
+import ar.edu.unju.fi.arquitecturas.tp2.model.CuentaCorriente;
+import ar.edu.unju.fi.arquitecturas.tp2.model.CuentaFinanciera;
+import ar.edu.unju.fi.arquitecturas.tp2.model.Transaccion;
+import ar.edu.unju.fi.arquitecturas.tp2.model.enums.EstadoCliente;
 import ar.edu.unju.fi.arquitecturas.tp2.model.enums.EstadoCuenta;
+import ar.edu.unju.fi.arquitecturas.tp2.model.enums.EstadoTransaccion;
+import ar.edu.unju.fi.arquitecturas.tp2.model.enums.TipoTransaccion;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
-import ar.edu.unju.fi.arquitecturas.tp2.model.CuentaFinanciera;
-
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
+import java.time.temporal.ChronoUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
-
-import ar.edu.unju.fi.arquitecturas.tp2.model.CuentaCorriente;
-import ar.edu.unju.fi.arquitecturas.tp2.model.Transaccion;
-import ar.edu.unju.fi.arquitecturas.tp2.model.enums.EstadoTransaccion;
-import ar.edu.unju.fi.arquitecturas.tp2.model.enums.TipoTransaccion;
-import java.time.LocalDateTime;
 
 @SpringBootTest
 class RelacionesJpaTest {
@@ -129,9 +129,13 @@ class RelacionesJpaTest {
         assertNotNull(transaccionRecuperada);
         assertEquals(cuentaId, transaccionRecuperada.getCuenta().getId());
         assertEquals(1, cuentaRecuperada.getTransacciones().size());
-        assertEquals(transaccionId,
-                cuentaRecuperada.getTransacciones().getFirst().getId());
+        assertEquals(
+                transaccionId,
+                cuentaRecuperada.getTransacciones().getFirst().getId()
+        );
+        assertNull(transaccionRecuperada.getOperador());
     }
+
     @Test
     @Transactional
     void deberiaPersistirRelacionReflexivaEntreClientes() {
@@ -175,5 +179,137 @@ class RelacionesJpaTest {
         assertNotNull(pedroRecuperado.getTitular());
         assertEquals(juanId, elenaRecuperada.getTitular().getId());
         assertEquals(juanId, pedroRecuperado.getTitular().getId());
+    }
+
+    @Test
+    @Transactional
+    void deberiaPersistirDatosDeActivacionDelCliente() {
+        LocalDateTime vencimiento = LocalDateTime.now()
+                .plusHours(24)
+                .truncatedTo(ChronoUnit.MICROS);
+
+        Cliente cliente = new Cliente();
+        cliente.setNombre("Cliente Activacion");
+        cliente.setCuil("20444444441");
+        cliente.setTokenActivacion("550e8400-e29b-41d4-a716-446655440000");
+        cliente.setTokenActivacionExpiraEn(vencimiento);
+
+        entityManager.persist(cliente);
+        entityManager.flush();
+
+        UUID clienteId = cliente.getId();
+
+        entityManager.clear();
+
+        Cliente clientePendiente = entityManager.find(Cliente.class, clienteId);
+
+        assertNotNull(clientePendiente);
+        assertEquals(
+                EstadoCliente.PENDIENTE_ACTIVACION,
+                clientePendiente.getEstado()
+        );
+        assertEquals(
+                "550e8400-e29b-41d4-a716-446655440000",
+                clientePendiente.getTokenActivacion()
+        );
+        assertEquals(vencimiento, clientePendiente.getTokenActivacionExpiraEn());
+        assertNull(clientePendiente.getFechaActivacion());
+
+        LocalDateTime fechaActivacion = LocalDateTime.now()
+                .truncatedTo(ChronoUnit.MICROS);
+
+        clientePendiente.setEstado(EstadoCliente.ACTIVO);
+        clientePendiente.setFechaActivacion(fechaActivacion);
+
+        entityManager.flush();
+        entityManager.clear();
+
+        Cliente clienteActivo = entityManager.find(Cliente.class, clienteId);
+
+        assertEquals(EstadoCliente.ACTIVO, clienteActivo.getEstado());
+        assertEquals(fechaActivacion, clienteActivo.getFechaActivacion());
+    }
+
+    @Test
+    @Transactional
+    void deberiaPersistirOperadorDeTransaccion() {
+        Cliente operador = new Cliente();
+        operador.setNombre("Cliente Operador");
+        operador.setCuil("20555555551");
+
+        CuentaCorriente cuenta = new CuentaCorriente();
+        cuenta.setCbu("2222333344445555666677");
+        cuenta.setAlias("PRUEBA.OPERADOR.01");
+        cuenta.setSaldoOperativo(new BigDecimal("100000.00"));
+        cuenta.setEstado(EstadoCuenta.ACTIVA);
+        cuenta.setDescubiertoAutorizado(BigDecimal.ZERO);
+        cuenta.setCostoComisionMantenimientoMensual(new BigDecimal("100.00"));
+
+        entityManager.persist(operador);
+        entityManager.persist(cuenta);
+
+        Transaccion transaccion = new Transaccion();
+        transaccion.setFechaHora(LocalDateTime.now());
+        transaccion.setMonto(new BigDecimal("10000.00"));
+        transaccion.setTipo(TipoTransaccion.EXTRACCION);
+        transaccion.setEstadoTransaccion(EstadoTransaccion.COMPLETADA);
+        transaccion.setCuenta(cuenta);
+        transaccion.setOperador(operador);
+
+        entityManager.persist(transaccion);
+        entityManager.flush();
+
+        UUID transaccionId = transaccion.getId();
+        UUID operadorId = operador.getId();
+
+        entityManager.clear();
+
+        Transaccion transaccionRecuperada =
+                entityManager.find(Transaccion.class, transaccionId);
+
+        assertNotNull(transaccionRecuperada);
+        assertNotNull(transaccionRecuperada.getOperador());
+        assertEquals(
+                operadorId,
+                transaccionRecuperada.getOperador().getId()
+        );
+    }
+
+    @Test
+    @Transactional
+    void deberiaPersistirDebitoComisionSinOperador() {
+        CuentaCorriente cuenta = new CuentaCorriente();
+        cuenta.setCbu("3333444455556666777788");
+        cuenta.setAlias("PRUEBA.COMISION.01");
+        cuenta.setSaldoOperativo(new BigDecimal("50000.00"));
+        cuenta.setEstado(EstadoCuenta.ACTIVA);
+        cuenta.setDescubiertoAutorizado(BigDecimal.ZERO);
+        cuenta.setCostoComisionMantenimientoMensual(new BigDecimal("100.00"));
+
+        entityManager.persist(cuenta);
+
+        Transaccion transaccion = new Transaccion();
+        transaccion.setFechaHora(LocalDateTime.now());
+        transaccion.setMonto(new BigDecimal("5000.00"));
+        transaccion.setTipo(TipoTransaccion.DEBITO_COMISION);
+        transaccion.setEstadoTransaccion(EstadoTransaccion.COMPLETADA);
+        transaccion.setCuenta(cuenta);
+
+        entityManager.persist(transaccion);
+        entityManager.flush();
+
+        UUID transaccionId = transaccion.getId();
+
+        entityManager.clear();
+
+        Transaccion transaccionRecuperada =
+                entityManager.find(Transaccion.class, transaccionId);
+
+        assertNotNull(transaccionRecuperada);
+        assertEquals(
+                TipoTransaccion.DEBITO_COMISION,
+                transaccionRecuperada.getTipo()
+        );
+        assertNull(transaccionRecuperada.getOperador());
     }
 }

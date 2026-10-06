@@ -12,10 +12,22 @@ import java.util.UUID;
 /**
  * Representa una transacción registrada en una cuenta financiera.
  *
- * <p>Cada transacción pertenece a una única {@link CuentaFinanciera}.
- * Hereda los campos de auditoría de {@link EntidadAuditable}.</p>
+ * <p>
+ * Cada transacción pertenece a una única {@link CuentaFinanciera}.
+ * Además, puede registrar opcionalmente al {@link Cliente} que realizó
+ * la operación.
+ * </p>
+ *
+ * <p>
+ * El operador es opcional porque existen transacciones generadas
+ * automáticamente por el sistema, como el débito de comisiones,
+ * que no son realizadas por un cliente.
+ * </p>
+ *
+ * <p>
+ * Hereda los campos de auditoría de {@link EntidadAuditable}.
+ * </p>
  */
-
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
@@ -23,7 +35,6 @@ import java.util.UUID;
 @Setter
 @Entity
 @Table(name = "transacciones")
-
 public class Transaccion extends EntidadAuditable {
 
     /** Identificador único de la transacción, generado como UUID. */
@@ -53,4 +64,16 @@ public class Transaccion extends EntidadAuditable {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "cuenta_id", nullable = false)
     private CuentaFinanciera cuenta;
+
+    /**
+     * Cliente que realizó la operación.
+     *
+     * <p>
+     * Es opcional porque algunas transacciones pueden ser generadas
+     * automáticamente por el sistema y no tener un operador humano.
+     * </p>
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "operador_id")
+    private Cliente operador;
 }
