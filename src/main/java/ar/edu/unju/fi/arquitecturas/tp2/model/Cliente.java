@@ -1,32 +1,42 @@
 package ar.edu.unju.fi.arquitecturas.tp2.model;
 
+import ar.edu.unju.fi.arquitecturas.tp2.model.enums.EstadoCliente;
 import jakarta.persistence.*;
 import lombok.*;
-import java.util.Set;
-import java.util.HashSet;
 
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * Representa a una persona registrada como cliente del sistema bancario.
  *
- * <p>Un cliente puede ser titular de varias cuentas financieras y una
- * cuenta puede tener varios titulares.</p>
+ * <p>
+ * Un cliente puede ser titular de varias cuentas financieras y una
+ * cuenta puede tener varios titulares.
+ * </p>
  *
- * <p>Hereda las fechas de auditoría de {@link EntidadAuditable}.</p>
+ * <p>
+ * A partir del TP5, todo cliente posee además un estado de activación
+ * y puede almacenar la información necesaria para completar el proceso
+ * de activación mediante token.
+ * </p>
+ *
+ * <p>
+ * Hereda las fechas de auditoría de {@link EntidadAuditable}.
+ * </p>
  *
  * @see CuentaFinanciera
+ * @see EstadoCliente
  */
-
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
 @Setter
-
 @Entity
 @Table(name = "clientes")
-
 public class Cliente extends EntidadAuditable {
 
     /** Identificador único del cliente, generado como UUID. */
@@ -53,6 +63,48 @@ public class Cliente extends EntidadAuditable {
     /** Dirección de contacto del cliente. */
     @Column(length = 255)
     private String direccion;
+
+    /**
+     * Estado actual del cliente dentro del proceso de activación.
+     *
+     * <p>
+     * Los nuevos clientes comienzan pendientes de activación hasta
+     * completar correctamente la validación del token correspondiente.
+     * </p>
+     */
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private EstadoCliente estado = EstadoCliente.PENDIENTE_ACTIVACION;
+
+    /**
+     * Token utilizado para completar la activación del cliente.
+     *
+     * <p>
+     * Puede ser nulo cuando todavía no fue generado o cuando el flujo
+     * de negocio no requiera un token.
+     * </p>
+     */
+    @Column(unique = true, length = 36)
+    private String tokenActivacion;
+
+    /**
+     * Fecha y hora límite hasta la cual el token de activación
+     * puede ser utilizado.
+     */
+    @Column(name = "token_activacion_expira_en")
+    private LocalDateTime tokenActivacionExpiraEn;
+
+    /**
+     * Fecha y hora en que el cliente completó correctamente
+     * su proceso de activación.
+     *
+     * <p>
+     * Permanece nula mientras el cliente se encuentre pendiente.
+     * </p>
+     */
+    @Column(name = "fecha_activacion")
+    private LocalDateTime fechaActivacion;
 
     /** Cliente al que este cliente referencia como titular principal. */
     @ManyToOne(fetch = FetchType.LAZY)
