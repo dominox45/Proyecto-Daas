@@ -56,4 +56,25 @@ public interface ConfiguracionService {
      *                               convertirse a entero
      */
     int obtenerValorEntero(String clave);
+
+    /**
+     * Recupera todos los parámetros de configuración registrados.
+     * @return Lista de DTOs con la configuración.
+     */
+    java.util.List<ar.edu.unju.fi.arquitecturas.tp2.dto.ConfiguracionResponseDto> obtenerTodas();
+
+    /**
+     * Recupera los detalles de un parámetro de configuración específico.
+     * @param clave Clave del parámetro.
+     * @return DTO con los detalles.
+     */
+    ar.edu.unju.fi.arquitecturas.tp2.dto.ConfiguracionResponseDto obtenerPorClave(String clave);
+
+    /**
+     * Actualiza el valor de un parámetro de configuración existente.
+     * @param clave Clave del parámetro a actualizar.
+     * @param request Nuevo valor a almacenar.
+     * @return DTO con la configuración actualizada.
+     */
+    ar.edu.unju.fi.arquitecturas.tp2.dto.ConfiguracionResponseDto actualizar(String clave, ar.edu.unju.fi.arquitecturas.tp2.dto.ConfiguracionUpdateRequestDto request);
 }
