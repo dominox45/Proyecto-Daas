@@ -74,9 +74,9 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
     /**
      * Construye el servicio mediante inyección de dependencias por constructor.
      *
-     * @param cuentaRepository repositorio de cuentas financieras
+     * @param cuentaRepository      repositorio de cuentas financieras
      * @param transaccionRepository repositorio de transacciones
-     * @param clienteRepository repositorio de clientes
+     * @param clienteRepository     repositorio de clientes
      */
     public CuentaFinancieraServiceImpl(
             CuentaFinancieraRepository cuentaRepository,
@@ -104,9 +104,9 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
      *
      * @param request datos necesarios para crear la cuenta
      * @return DTO con los datos de la cuenta registrada
-     * @throws IllegalArgumentException si la solicitud es nula, existe
-     *                                  otra cuenta con el mismo CBU o alias,
-     *                                  o faltan datos específicos del subtipo
+     * @throws IllegalArgumentException     si la solicitud es nula, existe
+     *                                      otra cuenta con el mismo CBU o alias,
+     *                                      o faltan datos específicos del subtipo
      * @throws RecursoNoEncontradoException si el cliente indicado no existe
      */
     @Override
@@ -136,6 +136,15 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
                                 "El cliente no existe"
                         )
                 );
+        /*
+         * Un cliente adherente no puede actuar como titular
+         * de una nueva cuenta financiera.
+         */
+        if (cliente.getTitular() != null) {
+            throw new IllegalStateException(
+                    "Los clientes adherentes solo pueden realizar extracciones"
+            );
+        }
 
         validarDuplicados(request);
 
@@ -201,11 +210,11 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
      * </p>
      *
      * @param cuentaId identificador de la cuenta
-     * @param monto monto que se desea depositar
+     * @param monto    monto que se desea depositar
      * @return cuenta financiera actualizada
-     * @throws IllegalArgumentException si el monto es nulo o no es positivo
+     * @throws IllegalArgumentException     si el monto es nulo o no es positivo
      * @throws RecursoNoEncontradoException si la cuenta no existe
-     * @throws IllegalStateException si la cuenta no se encuentra activa
+     * @throws IllegalStateException        si la cuenta no se encuentra activa
      */
     @Override
     @Transactional
@@ -256,7 +265,15 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
     }
 
     /**
-     * Realiza una extracción sobre una cuenta financiera activa.
+     * Realiza una extracción sobre una cuenta financiera activa,
+     * identificando al cliente que ejecuta la operación.
+     *
+     * <p>
+     * Si el operador es un titular, solamente puede extraer de una cuenta
+     * de la que figure como titular. Si el operador es un adherente,
+     * solamente puede extraer de una cuenta perteneciente a su titular
+     * y para la cual haya sido autorizado explícitamente.
+     * </p>
      *
      * <p>
      * En una caja de ahorro los fondos disponibles corresponden al saldo
@@ -266,21 +283,40 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
      *
      * <p>
      * Cuando la operación es válida se actualiza el saldo y se registra
-     * una transacción de tipo {@link TipoTransaccion#EXTRACCION}.
+     * una transacción de tipo {@link TipoTransaccion#EXTRACCION},
+     * almacenando además al cliente que realizó la operación.
      * </p>
      *
      * @param cuentaId identificador de la cuenta
+     * @param operadorId identificador del cliente que realiza la extracción
      * @param monto monto que se desea extraer
      * @return cuenta financiera actualizada
-     * @throws IllegalArgumentException si el monto es nulo o no es positivo
-     * @throws RecursoNoEncontradoException si la cuenta no existe
+     * @throws IllegalArgumentException si algún dato obligatorio es inválido
+     * @throws RecursoNoEncontradoException si la cuenta o el operador no existen
      * @throws IllegalStateException si la cuenta no se encuentra activa
+     *                               o el operador no está autorizado
      * @throws SaldoInsuficienteException si los fondos disponibles
      *                                    no alcanzan para realizar la operación
      */
     @Override
     @Transactional
-    public CuentaFinanciera extraer(UUID cuentaId, BigDecimal monto) {
+    public CuentaFinanciera extraer(
+            UUID cuentaId,
+            UUID operadorId,
+            BigDecimal monto) {
+
+        if (cuentaId == null) {
+            throw new IllegalArgumentException(
+                    "El identificador de la cuenta es obligatorio"
+            );
+        }
+
+        if (operadorId == null) {
+            throw new IllegalArgumentException(
+                    "El operador es obligatorio"
+            );
+        }
+
         if (monto == null || monto.signum() <= 0) {
             throw new IllegalArgumentException(
                     "El monto debe ser positivo"
@@ -299,6 +335,15 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
                     "La cuenta no está activa"
             );
         }
+
+        Cliente operador = clienteRepository.findById(operadorId)
+                .orElseThrow(() ->
+                        new RecursoNoEncontradoException(
+                                "El operador no existe"
+                        )
+                );
+
+        validarOperadorExtraccion(cuenta, operador);
 
         BigDecimal fondosDisponibles = cuenta.getSaldoOperativo();
 
@@ -327,17 +372,111 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
                 .tipo(TipoTransaccion.EXTRACCION)
                 .estadoTransaccion(EstadoTransaccion.COMPLETADA)
                 .cuenta(cuentaGuardada)
+                .operador(operador)
                 .build();
 
         transaccionRepository.save(transaccion);
 
         log.info(
-                "Extracción realizada correctamente. cuentaId={}, monto={}",
+                "Extracción realizada correctamente. cuentaId={}, operadorId={}, monto={}",
                 cuentaGuardada.getId(),
+                operador.getId(),
                 monto
         );
 
         return cuentaGuardada;
+    }
+
+    /**
+     * Verifica que el cliente que intenta realizar una extracción
+     * esté autorizado para operar sobre la cuenta indicada.
+     *
+     * <p>
+     * Un cliente sin titular asociado se considera titular y solamente
+     * puede operar sobre cuentas en las que figure como titular.
+     * </p>
+     *
+     * <p>
+     * Un cliente con titular asociado se considera adherente y solamente
+     * puede operar sobre cuentas que hayan sido autorizadas explícitamente
+     * para él y que continúen perteneciendo a su titular.
+     * </p>
+     *
+     * @param cuenta cuenta sobre la que se realizará la extracción
+     * @param operador cliente que intenta realizar la operación
+     * @throws IllegalStateException si el operador no está autorizado
+     *                               para extraer de la cuenta
+     */
+    private void validarOperadorExtraccion(
+            CuentaFinanciera cuenta,
+            Cliente operador) {
+
+        /*
+         * Caso 1: el operador es titular.
+         */
+        if (operador.getTitular() == null) {
+
+            boolean esTitularDeLaCuenta =
+                    cuenta.getTitulares()
+                            .stream()
+                            .anyMatch(titular ->
+                                    titular.getId() != null
+                                            && titular.getId().equals(
+                                            operador.getId()
+                                    )
+                            );
+
+            if (!esTitularDeLaCuenta) {
+                throw new IllegalStateException(
+                        "El operador no está autorizado para extraer de esta cuenta"
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * Caso 2: el operador es adherente.
+         * La cuenta debe haber sido autorizada explícitamente.
+         */
+        boolean cuentaAutorizada =
+                operador.getCuentasAutorizadas()
+                        .stream()
+                        .anyMatch(cuentaPermitida ->
+                                cuentaPermitida.getId() != null
+                                        && cuentaPermitida.getId().equals(
+                                        cuenta.getId()
+                                )
+                        );
+
+        if (!cuentaAutorizada) {
+            throw new IllegalStateException(
+                    "El adherente no está autorizado para extraer de esta cuenta"
+            );
+        }
+
+        /*
+         * Además verificamos que la cuenta continúe perteneciendo
+         * al titular del adherente.
+         */
+        UUID titularId =
+                operador.getTitular().getId();
+
+        boolean cuentaPerteneceAlTitular =
+                cuenta.getTitulares()
+                        .stream()
+                        .anyMatch(titular ->
+                                titular.getId() != null
+                                        && titular.getId().equals(
+                                        titularId
+                                )
+                        );
+
+        if (!cuentaPerteneceAlTitular) {
+            throw new IllegalStateException(
+                    "La cuenta autorizada ya no pertenece al titular del adherente"
+            );
+        }
     }
 
     /**
@@ -373,7 +512,7 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
      *
      * @param request DTO con los datos de creación de la cuenta
      * @return instancia concreta de {@link CajaDeAhorro}
-     *         o {@link CuentaCorriente}
+     * o {@link CuentaCorriente}
      * @throws IllegalArgumentException si faltan los datos específicos
      *                                  del tipo solicitado
      */

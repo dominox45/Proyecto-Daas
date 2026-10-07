@@ -3,10 +3,13 @@ package ar.edu.unju.fi.arquitecturas.tp2.controller;
 import ar.edu.unju.fi.arquitecturas.tp2.dto.CuentaRequestDto;
 import ar.edu.unju.fi.arquitecturas.tp2.dto.CuentaResponseDto;
 import ar.edu.unju.fi.arquitecturas.tp2.service.CuentaFinancieraService;
+import ar.edu.unju.fi.arquitecturas.tp2.dto.ExtraccionRequestDto;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 /**
  * Controlador REST encargado de gestionar las peticiones HTTP
@@ -24,7 +27,7 @@ import org.springframework.web.bind.annotation.*;
  * </p>
  *
  * @author MaxDz
- * @version 1.0.0
+ * @version 1.1.0
  * @see CuentaFinancieraService
  * @see CuentaRequestDto
  * @see CuentaResponseDto
@@ -91,5 +94,34 @@ public class CuentaController {
                 cuentaService.buscarPorCbu(cbu);
 
         return ResponseEntity.ok(response);
+    }
+    /**
+     * Realiza una extracción sobre una cuenta financiera.
+     *
+     * <p>
+     * El cliente que ejecuta la operación se identifica mediante
+     * {@link ExtraccionRequestDto#getOperadorId()}. La capa Service
+     * determina si se trata de un titular o de un adherente autorizado
+     * explícitamente para operar sobre la cuenta.
+     * </p>
+     *
+     * @param cuentaId identificador de la cuenta sobre la que se realizará
+     *                 la extracción
+     * @param request datos de la extracción solicitada
+     * @return respuesta HTTP 204 (No Content) cuando la operación
+     *         se completa correctamente
+     */
+    @PostMapping("/{cuentaId}/extracciones")
+    public ResponseEntity<Void> extraer(
+            @PathVariable UUID cuentaId,
+            @Valid @RequestBody ExtraccionRequestDto request) {
+
+        cuentaService.extraer(
+                cuentaId,
+                request.getOperadorId(),
+                request.getMonto()
+        );
+
+        return ResponseEntity.noContent().build();
     }
 }

@@ -2,13 +2,18 @@ package ar.edu.unju.fi.arquitecturas.tp2.service.impl;
 
 import ar.edu.unju.fi.arquitecturas.tp2.dto.ClienteRequestDto;
 import ar.edu.unju.fi.arquitecturas.tp2.dto.ClienteResponseDto;
+import ar.edu.unju.fi.arquitecturas.tp2.exception.RecursoNoEncontradoException;
 import ar.edu.unju.fi.arquitecturas.tp2.model.Cliente;
+import ar.edu.unju.fi.arquitecturas.tp2.model.CuentaFinanciera;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.ClienteRepository;
+import ar.edu.unju.fi.arquitecturas.tp2.repository.CuentaFinancieraRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.service.ClienteService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Implementación del contrato {@link ClienteService} para la gestión
@@ -17,8 +22,13 @@ import java.util.Optional;
  * <p>
  * Centraliza la lógica de negocio asociada al registro de clientes,
  * incluyendo las validaciones de unicidad, la conversión entre DTOs
- * y entidades, la persistencia mediante el repositorio y el registro
- * de eventos utilizando logs.
+ * y entidades, la persistencia y la gestión de relaciones de grupo familiar.
+ * </p>
+ *
+ * <p>
+ * También gestiona las autorizaciones explícitas que permiten a un
+ * cliente adherente realizar extracciones sobre determinadas cuentas
+ * pertenecientes a su titular.
  * </p>
  *
  * <p>
@@ -27,9 +37,10 @@ import java.util.Optional;
  * </p>
  *
  * @author MaxDz
- * @version 1.0.0
+ * @version 1.2.0
  * @see ClienteService
  * @see ClienteRepository
+ * @see CuentaFinancieraRepository
  * @see ClienteRequestDto
  * @see ClienteResponseDto
  */
@@ -43,13 +54,24 @@ public class ClienteServiceImpl implements ClienteService {
     private final ClienteRepository clienteRepository;
 
     /**
+     * Repositorio utilizado para recuperar las cuentas que serán
+     * autorizadas a los clientes adherentes.
+     */
+    private final CuentaFinancieraRepository cuentaRepository;
+
+    /**
      * Construye el servicio utilizando inyección de dependencias
      * mediante constructor.
      *
      * @param clienteRepository repositorio de clientes
+     * @param cuentaRepository repositorio de cuentas financieras
      */
-    public ClienteServiceImpl(ClienteRepository clienteRepository) {
+    public ClienteServiceImpl(
+            ClienteRepository clienteRepository,
+            CuentaFinancieraRepository cuentaRepository) {
+
         this.clienteRepository = clienteRepository;
+        this.cuentaRepository = cuentaRepository;
     }
 
     /**
@@ -94,6 +116,217 @@ public class ClienteServiceImpl implements ClienteService {
     @Override
     public Optional<Cliente> buscarPorCuil(String cuil) {
         return clienteRepository.findByCuil(cuil);
+    }
+
+    /**
+     * Asocia un cliente existente como adherente de otro cliente titular.
+     *
+     * <p>
+     * La relación de grupo familiar se representa mediante el atributo
+     * {@link Cliente#getTitular()} del cliente adherente. Un titular válido
+     * no debe poseer a su vez otro titular.
+     * </p>
+     *
+     * @param titularId identificador del cliente titular
+     * @param adherenteId identificador del cliente que será adherente
+     * @throws IllegalArgumentException si alguno de los identificadores
+     *                                  es nulo, ambos corresponden al mismo
+     *                                  cliente o la relación solicitada es inválida
+     * @throws RecursoNoEncontradoException si alguno de los clientes no existe
+     */
+    @Override
+    @Transactional
+    public void asociarAdherente(
+            UUID titularId,
+            UUID adherenteId) {
+
+        if (titularId == null) {
+            throw new IllegalArgumentException(
+                    "El identificador del titular es obligatorio"
+            );
+        }
+
+        if (adherenteId == null) {
+            throw new IllegalArgumentException(
+                    "El identificador del adherente es obligatorio"
+            );
+        }
+
+        if (titularId.equals(adherenteId)) {
+            throw new IllegalArgumentException(
+                    "Un cliente no puede ser adherente de sí mismo"
+            );
+        }
+
+        Cliente titular = clienteRepository.findById(titularId)
+                .orElseThrow(() ->
+                        new RecursoNoEncontradoException(
+                                "El cliente titular no existe"
+                        )
+                );
+
+        Cliente adherente = clienteRepository.findById(adherenteId)
+                .orElseThrow(() ->
+                        new RecursoNoEncontradoException(
+                                "El cliente adherente no existe"
+                        )
+                );
+
+        if (titular.getTitular() != null) {
+            throw new IllegalArgumentException(
+                    "Un cliente adherente no puede actuar como titular"
+            );
+        }
+
+        if (adherente.getTitular() != null) {
+            if (titular.getId().equals(
+                    adherente.getTitular().getId()
+            )) {
+                throw new IllegalArgumentException(
+                        "El cliente ya es adherente del titular indicado"
+                );
+            }
+
+            throw new IllegalArgumentException(
+                    "El cliente ya posee un titular asociado"
+            );
+        }
+
+        adherente.setTitular(titular);
+        clienteRepository.save(adherente);
+
+        log.info(
+                "Adherente asociado correctamente. titularId={}, adherenteId={}",
+                titularId,
+                adherenteId
+        );
+    }
+
+    /**
+     * Autoriza a un cliente adherente a realizar extracciones
+     * sobre una cuenta específica perteneciente a su titular.
+     *
+     * <p>
+     * La autorización es independiente de la titularidad de la cuenta.
+     * El adherente conserva su relación con el titular y únicamente
+     * incorpora la cuenta dentro de su conjunto de cuentas autorizadas.
+     * </p>
+     *
+     * @param titularId identificador del cliente titular
+     * @param adherenteId identificador del cliente adherente
+     * @param cuentaId identificador de la cuenta que se desea autorizar
+     * @throws IllegalArgumentException si algún identificador es nulo,
+     *                                  la relación familiar no corresponde,
+     *                                  la cuenta no pertenece al titular
+     *                                  o la autorización ya existe
+     * @throws RecursoNoEncontradoException si alguno de los recursos
+     *                                      indicados no existe
+     */
+    @Override
+    @Transactional
+    public void autorizarCuentaAdherente(
+            UUID titularId,
+            UUID adherenteId,
+            UUID cuentaId) {
+
+        if (titularId == null) {
+            throw new IllegalArgumentException(
+                    "El identificador del titular es obligatorio"
+            );
+        }
+
+        if (adherenteId == null) {
+            throw new IllegalArgumentException(
+                    "El identificador del adherente es obligatorio"
+            );
+        }
+
+        if (cuentaId == null) {
+            throw new IllegalArgumentException(
+                    "El identificador de la cuenta es obligatorio"
+            );
+        }
+
+        Cliente titular = clienteRepository.findById(titularId)
+                .orElseThrow(() ->
+                        new RecursoNoEncontradoException(
+                                "El cliente titular no existe"
+                        )
+                );
+
+        Cliente adherente = clienteRepository.findById(adherenteId)
+                .orElseThrow(() ->
+                        new RecursoNoEncontradoException(
+                                "El cliente adherente no existe"
+                        )
+                );
+
+        CuentaFinanciera cuenta = cuentaRepository.findById(cuentaId)
+                .orElseThrow(() ->
+                        new RecursoNoEncontradoException(
+                                "La cuenta no existe"
+                        )
+                );
+
+        /*
+         * El cliente debe pertenecer exactamente al grupo familiar
+         * del titular indicado.
+         */
+        if (adherente.getTitular() == null
+                || adherente.getTitular().getId() == null
+                || !titularId.equals(
+                adherente.getTitular().getId()
+        )) {
+
+            throw new IllegalArgumentException(
+                    "El cliente no es adherente del titular indicado"
+            );
+        }
+
+        /*
+         * La cuenta que se desea autorizar debe pertenecer realmente
+         * al titular del grupo familiar.
+         */
+        boolean cuentaPerteneceAlTitular =
+                cuenta.getTitulares()
+                        .stream()
+                        .anyMatch(cliente ->
+                                titularId.equals(cliente.getId())
+                        );
+
+        if (!cuentaPerteneceAlTitular) {
+            throw new IllegalArgumentException(
+                    "La cuenta no pertenece al titular indicado"
+            );
+        }
+
+        /*
+         * No se permite registrar dos veces la misma autorización.
+         */
+        boolean yaAutorizada =
+                adherente.getCuentasAutorizadas()
+                        .stream()
+                        .anyMatch(cuentaAutorizada ->
+                                cuentaId.equals(
+                                        cuentaAutorizada.getId()
+                                )
+                        );
+
+        if (yaAutorizada) {
+            throw new IllegalArgumentException(
+                    "La cuenta ya está autorizada para el adherente"
+            );
+        }
+
+        adherente.autorizarCuenta(cuenta);
+        clienteRepository.save(adherente);
+
+        log.info(
+                "Cuenta autorizada para adherente. titularId={}, adherenteId={}, cuentaId={}",
+                titular.getId(),
+                adherente.getId(),
+                cuenta.getId()
+        );
     }
 
     /**
@@ -144,6 +377,7 @@ public class ClienteServiceImpl implements ClienteService {
         if (request.getEmail() != null
                 && !request.getEmail().isBlank()
                 && clienteRepository.findByEmail(request.getEmail()).isPresent()) {
+
             throw new IllegalArgumentException(
                     "Ya existe un cliente con el email indicado"
             );

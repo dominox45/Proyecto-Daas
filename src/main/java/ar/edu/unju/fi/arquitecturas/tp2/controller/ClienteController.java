@@ -8,6 +8,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 /**
  * Controlador REST encargado de gestionar las peticiones HTTP
  * relacionadas con los clientes del sistema bancario.
@@ -24,7 +26,7 @@ import org.springframework.web.bind.annotation.*;
  * </p>
  *
  * @author MaxDz
- * @version 1.0.0
+ * @version 1.2.0
  * @see ClienteService
  * @see ClienteRequestDto
  * @see ClienteResponseDto
@@ -69,5 +71,57 @@ public class ClienteController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(response);
+    }
+
+    /**
+     * Asocia un cliente existente como adherente de otro cliente titular.
+     *
+     * <p>
+     * La validación de la relación familiar pertenece a la capa Service.
+     * Si la asociación se completa correctamente, la operación responde
+     * sin contenido.
+     * </p>
+     *
+     * @param titularId identificador del cliente titular
+     * @param adherenteId identificador del cliente que será adherente
+     * @return respuesta HTTP 204 (No Content)
+     */
+    @PostMapping("/{titularId}/adherentes/{adherenteId}")
+    public ResponseEntity<Void> asociarAdherente(
+            @PathVariable UUID titularId,
+            @PathVariable UUID adherenteId) {
+
+        clienteService.asociarAdherente(
+                titularId,
+                adherenteId
+        );
+
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Autoriza a un cliente adherente a realizar extracciones sobre
+     * una cuenta específica perteneciente a su titular.
+     *
+     * @param titularId identificador del cliente titular
+     * @param adherenteId identificador del cliente adherente
+     * @param cuentaId identificador de la cuenta que será autorizada
+     * @return respuesta HTTP 204 cuando la autorización se registra correctamente
+     */
+    @PostMapping(
+            "/{titularId}/adherentes/{adherenteId}/cuentas/{cuentaId}"
+    )
+    public ResponseEntity<Void> autorizarCuentaAdherente(
+            @PathVariable UUID titularId,
+            @PathVariable UUID adherenteId,
+            @PathVariable UUID cuentaId) {
+
+        clienteService.autorizarCuentaAdherente(
+                titularId,
+                adherenteId,
+                cuentaId
+        );
+
+        return ResponseEntity.noContent().build();
     }
 }

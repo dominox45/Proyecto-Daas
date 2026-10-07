@@ -293,6 +293,56 @@ class CuentaFinancieraServiceTest {
     }
 
     /**
+     * Verifica que un cliente adherente no pueda crear una cuenta
+     * financiera actuando como titular.
+     */
+    @Test
+    void deberiaRechazarCreacionDeCuentaParaAdherente() {
+        UUID titularId = UUID.randomUUID();
+        UUID adherenteId = UUID.randomUUID();
+
+        Cliente titular = Cliente.builder()
+                .id(titularId)
+                .build();
+
+        Cliente adherente = Cliente.builder()
+                .id(adherenteId)
+                .titular(titular)
+                .build();
+
+        CuentaRequestDto request = new CuentaRequestDto(
+                adherenteId,
+                TipoCuenta.CAJA_DE_AHORRO,
+                "2850590940090418135299",
+                "adherente.ahorro",
+                new BigDecimal("0.050000"),
+                5,
+                null,
+                null
+        );
+
+        when(clienteRepository.findById(adherenteId))
+                .thenReturn(Optional.of(adherente));
+
+        IllegalStateException excepcion = assertThrows(
+                IllegalStateException.class,
+                () -> cuentaService.crear(request)
+        );
+
+        assertEquals(
+                "Los clientes adherentes solo pueden realizar extracciones",
+                excepcion.getMessage()
+        );
+
+        verify(clienteRepository).findById(adherenteId);
+
+        verifyNoInteractions(
+                cuentaRepository,
+                transaccionRepository
+        );
+    }
+
+    /**
      * Verifica que no pueda crearse una cuenta cuando el cliente
      * indicado en la solicitud no existe.
      */
@@ -672,38 +722,42 @@ class CuentaFinancieraServiceTest {
     }
 
     /**
-     * Verifica que una extracción válida disminuya correctamente
-     * el saldo de una cuenta activa y registre una transacción.
+     * Verifica que un cliente titular pueda extraer de una cuenta
+     * de la que figura como titular y que la transacción registre
+     * correctamente al operador.
      */
     @Test
-    void deberiaExtraerYRegistrarTransaccion() {
+    void deberiaExtraerComoTitularYRegistrarOperador() {
         UUID cuentaId = UUID.randomUUID();
-        BigDecimal monto =
-                new BigDecimal("300.00");
+        UUID titularId = UUID.randomUUID();
+        BigDecimal monto = new BigDecimal("300.00");
 
-        CuentaCorriente cuenta =
-                new CuentaCorriente();
+        Cliente titular = Cliente.builder()
+                .id(titularId)
+                .nombre("Juan Pérez")
+                .build();
 
+        CuentaCorriente cuenta = new CuentaCorriente();
         cuenta.setId(cuentaId);
         cuenta.setEstado(EstadoCuenta.ACTIVA);
-        cuenta.setSaldoOperativo(
-                new BigDecimal("1000.00")
-        );
-        cuenta.setDescubiertoAutorizado(
-                BigDecimal.ZERO
-        );
+        cuenta.setSaldoOperativo(new BigDecimal("1000.00"));
+        cuenta.setDescubiertoAutorizado(BigDecimal.ZERO);
+        cuenta.getTitulares().add(titular);
 
         when(cuentaRepository.findById(cuentaId))
                 .thenReturn(Optional.of(cuenta));
 
+        when(clienteRepository.findById(titularId))
+                .thenReturn(Optional.of(titular));
+
         when(cuentaRepository.save(cuenta))
                 .thenReturn(cuenta);
 
-        var resultado =
-                cuentaService.extraer(
-                        cuentaId,
-                        monto
-                );
+        CuentaFinanciera resultado = cuentaService.extraer(
+                cuentaId,
+                titularId,
+                monto
+        );
 
         assertEquals(
                 new BigDecimal("700.00"),
@@ -711,89 +765,337 @@ class CuentaFinancieraServiceTest {
         );
 
         ArgumentCaptor<Transaccion> captor =
-                ArgumentCaptor.forClass(
-                        Transaccion.class
-                );
+                ArgumentCaptor.forClass(Transaccion.class);
 
-        verify(cuentaRepository)
-                .save(cuenta);
+        verify(cuentaRepository).save(cuenta);
+        verify(transaccionRepository).save(captor.capture());
 
-        verify(transaccionRepository)
-                .save(captor.capture());
+        Transaccion transaccion = captor.getValue();
 
-        Transaccion transaccion =
-                captor.getValue();
-
-        assertEquals(
-                monto,
-                transaccion.getMonto()
-        );
-
+        assertEquals(monto, transaccion.getMonto());
         assertEquals(
                 TipoTransaccion.EXTRACCION,
                 transaccion.getTipo()
         );
-
         assertEquals(
                 EstadoTransaccion.COMPLETADA,
                 transaccion.getEstadoTransaccion()
         );
+        assertSame(cuenta, transaccion.getCuenta());
+        assertSame(titular, transaccion.getOperador());
+        assertNotNull(transaccion.getFechaHora());
+    }
+
+    /**
+     * Verifica que un cliente adherente pueda realizar una extracción
+     * sobre una cuenta perteneciente a su titular.
+     */
+    @Test
+    void deberiaPermitirExtraccionDeAdherenteSobreCuentaDelTitular() {
+        UUID cuentaId = UUID.randomUUID();
+        UUID titularId = UUID.randomUUID();
+        UUID adherenteId = UUID.randomUUID();
+
+        Cliente titular = Cliente.builder()
+                .id(titularId)
+                .nombre("Juan Pérez")
+                .build();
+
+        Cliente adherente = Cliente.builder()
+                .id(adherenteId)
+                .nombre("María Pérez")
+                .titular(titular)
+                .build();
+
+        CuentaCorriente cuenta = new CuentaCorriente();
+        cuenta.setId(cuentaId);
+        cuenta.setEstado(EstadoCuenta.ACTIVA);
+        cuenta.setSaldoOperativo(new BigDecimal("1000.00"));
+        cuenta.setDescubiertoAutorizado(BigDecimal.ZERO);
+        cuenta.getTitulares().add(titular);
+        adherente.autorizarCuenta(cuenta);
+
+        when(cuentaRepository.findById(cuentaId))
+                .thenReturn(Optional.of(cuenta));
+
+        when(clienteRepository.findById(adherenteId))
+                .thenReturn(Optional.of(adherente));
+
+        when(cuentaRepository.save(cuenta))
+                .thenReturn(cuenta);
+
+        cuentaService.extraer(
+                cuentaId,
+                adherenteId,
+                new BigDecimal("250.00")
+        );
+
+        assertEquals(
+                new BigDecimal("750.00"),
+                cuenta.getSaldoOperativo()
+        );
+
+        ArgumentCaptor<Transaccion> captor =
+                ArgumentCaptor.forClass(Transaccion.class);
+
+        verify(transaccionRepository).save(captor.capture());
 
         assertSame(
-                cuenta,
-                transaccion.getCuenta()
+                adherente,
+                captor.getValue().getOperador()
+        );
+    }
+
+    /**
+     * Verifica que un adherente no pueda extraer de una cuenta
+     * que pertenece a su titular pero que no fue autorizada
+     * explícitamente para él.
+     */
+    @Test
+    void deberiaRechazarAdherenteSobreCuentaNoAutorizada() {
+        UUID cuentaId = UUID.randomUUID();
+        UUID adherenteId = UUID.randomUUID();
+
+        Cliente titular = Cliente.builder()
+                .id(UUID.randomUUID())
+                .build();
+
+        Cliente adherente = Cliente.builder()
+                .id(adherenteId)
+                .titular(titular)
+                .build();
+
+        CuentaCorriente cuenta = new CuentaCorriente();
+        cuenta.setId(cuentaId);
+        cuenta.setEstado(EstadoCuenta.ACTIVA);
+        cuenta.setSaldoOperativo(new BigDecimal("1000.00"));
+        cuenta.setDescubiertoAutorizado(BigDecimal.ZERO);
+
+        /*
+         * La cuenta pertenece efectivamente al titular,
+         * pero no fue agregada a cuentasAutorizadas del adherente.
+         */
+        cuenta.getTitulares().add(titular);
+
+        when(cuentaRepository.findById(cuentaId))
+                .thenReturn(Optional.of(cuenta));
+
+        when(clienteRepository.findById(adherenteId))
+                .thenReturn(Optional.of(adherente));
+
+        IllegalStateException excepcion = assertThrows(
+                IllegalStateException.class,
+                () -> cuentaService.extraer(
+                        cuentaId,
+                        adherenteId,
+                        new BigDecimal("100.00")
+                )
         );
 
-        assertNotNull(
-                transaccion.getFechaHora()
+        assertEquals(
+                "El adherente no está autorizado para extraer de esta cuenta",
+                excepcion.getMessage()
         );
+
+        assertEquals(
+                new BigDecimal("1000.00"),
+                cuenta.getSaldoOperativo()
+        );
+
+        verify(cuentaRepository, never()).save(any());
+        verifyNoInteractions(transaccionRepository);
+    }
+
+    /**
+     * Verifica que una autorización previa deje de ser válida
+     * si la cuenta ya no pertenece al titular del adherente.
+     */
+    @Test
+    void deberiaRechazarCuentaAutorizadaQueYaNoPerteneceAlTitular() {
+        UUID cuentaId = UUID.randomUUID();
+        UUID adherenteId = UUID.randomUUID();
+
+        Cliente titular = Cliente.builder()
+                .id(UUID.randomUUID())
+                .build();
+
+        Cliente adherente = Cliente.builder()
+                .id(adherenteId)
+                .titular(titular)
+                .build();
+
+        Cliente titularAjeno = Cliente.builder()
+                .id(UUID.randomUUID())
+                .build();
+
+        CuentaCorriente cuenta = new CuentaCorriente();
+        cuenta.setId(cuentaId);
+        cuenta.setEstado(EstadoCuenta.ACTIVA);
+        cuenta.setSaldoOperativo(new BigDecimal("1000.00"));
+        cuenta.setDescubiertoAutorizado(BigDecimal.ZERO);
+
+        /*
+         * La autorización existe todavía en el adherente...
+         */
+        adherente.autorizarCuenta(cuenta);
+
+        /*
+         * ...pero actualmente la cuenta pertenece a otra persona.
+         */
+        cuenta.getTitulares().add(titularAjeno);
+
+        when(cuentaRepository.findById(cuentaId))
+                .thenReturn(Optional.of(cuenta));
+
+        when(clienteRepository.findById(adherenteId))
+                .thenReturn(Optional.of(adherente));
+
+        IllegalStateException excepcion = assertThrows(
+                IllegalStateException.class,
+                () -> cuentaService.extraer(
+                        cuentaId,
+                        adherenteId,
+                        new BigDecimal("100.00")
+                )
+        );
+
+        assertEquals(
+                "La cuenta autorizada ya no pertenece al titular del adherente",
+                excepcion.getMessage()
+        );
+
+        assertEquals(
+                new BigDecimal("1000.00"),
+                cuenta.getSaldoOperativo()
+        );
+
+        verify(cuentaRepository, never()).save(any());
+        verifyNoInteractions(transaccionRepository);
+    }
+
+    /**
+     * Verifica que un titular no pueda extraer de una cuenta
+     * perteneciente exclusivamente a otro titular.
+     */
+    @Test
+    void deberiaRechazarTitularSobreCuentaAjena() {
+        UUID cuentaId = UUID.randomUUID();
+        UUID operadorId = UUID.randomUUID();
+
+        Cliente operador = Cliente.builder()
+                .id(operadorId)
+                .build();
+
+        Cliente titularAjeno = Cliente.builder()
+                .id(UUID.randomUUID())
+                .build();
+
+        CuentaCorriente cuenta = new CuentaCorriente();
+        cuenta.setId(cuentaId);
+        cuenta.setEstado(EstadoCuenta.ACTIVA);
+        cuenta.setSaldoOperativo(new BigDecimal("1000.00"));
+        cuenta.setDescubiertoAutorizado(BigDecimal.ZERO);
+        cuenta.getTitulares().add(titularAjeno);
+
+        when(cuentaRepository.findById(cuentaId))
+                .thenReturn(Optional.of(cuenta));
+
+        when(clienteRepository.findById(operadorId))
+                .thenReturn(Optional.of(operador));
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> cuentaService.extraer(
+                        cuentaId,
+                        operadorId,
+                        new BigDecimal("100.00")
+                )
+        );
+
+        verify(cuentaRepository, never()).save(any());
+        verifyNoInteractions(transaccionRepository);
+    }
+
+    /**
+     * Verifica que la extracción sea rechazada cuando el cliente
+     * indicado como operador no existe.
+     */
+    @Test
+    void deberiaRechazarExtraccionCuandoOperadorNoExiste() {
+        UUID cuentaId = UUID.randomUUID();
+        UUID operadorId = UUID.randomUUID();
+
+        CuentaCorriente cuenta = new CuentaCorriente();
+        cuenta.setId(cuentaId);
+        cuenta.setEstado(EstadoCuenta.ACTIVA);
+        cuenta.setSaldoOperativo(new BigDecimal("1000.00"));
+        cuenta.setDescubiertoAutorizado(BigDecimal.ZERO);
+
+        when(cuentaRepository.findById(cuentaId))
+                .thenReturn(Optional.of(cuenta));
+
+        when(clienteRepository.findById(operadorId))
+                .thenReturn(Optional.empty());
+
+        RecursoNoEncontradoException excepcion = assertThrows(
+                RecursoNoEncontradoException.class,
+                () -> cuentaService.extraer(
+                        cuentaId,
+                        operadorId,
+                        new BigDecimal("100.00")
+                )
+        );
+
+        assertEquals(
+                "El operador no existe",
+                excepcion.getMessage()
+        );
+
+        verify(cuentaRepository, never()).save(any());
+        verifyNoInteractions(transaccionRepository);
     }
 
     /**
      * Verifica que una cuenta corriente pueda utilizar su descubierto
      * autorizado cuando el saldo operativo no alcanza por sí solo.
-     *
-     * <p>
-     * En este escenario la extracción puede dejar un saldo negativo,
-     * siempre que no supere el límite de descubierto establecido.
-     * </p>
      */
     @Test
     void deberiaPermitirExtraccionUsandoDescubiertoAutorizado() {
         UUID cuentaId = UUID.randomUUID();
+        UUID titularId = UUID.randomUUID();
 
-        CuentaCorriente cuenta =
-                new CuentaCorriente();
+        Cliente titular = Cliente.builder()
+                .id(titularId)
+                .build();
 
+        CuentaCorriente cuenta = new CuentaCorriente();
         cuenta.setId(cuentaId);
         cuenta.setEstado(EstadoCuenta.ACTIVA);
-        cuenta.setSaldoOperativo(
-                new BigDecimal("1000.00")
-        );
-        cuenta.setDescubiertoAutorizado(
-                new BigDecimal("500.00")
-        );
+        cuenta.setSaldoOperativo(new BigDecimal("1000.00"));
+        cuenta.setDescubiertoAutorizado(new BigDecimal("500.00"));
+        cuenta.getTitulares().add(titular);
 
         when(cuentaRepository.findById(cuentaId))
                 .thenReturn(Optional.of(cuenta));
 
+        when(clienteRepository.findById(titularId))
+                .thenReturn(Optional.of(titular));
+
         when(cuentaRepository.save(cuenta))
                 .thenReturn(cuenta);
 
-        CuentaFinanciera resultado =
-                cuentaService.extraer(
-                        cuentaId,
-                        new BigDecimal("1200.00")
-                );
+        CuentaFinanciera resultado = cuentaService.extraer(
+                cuentaId,
+                titularId,
+                new BigDecimal("1200.00")
+        );
 
         assertEquals(
                 new BigDecimal("-200.00"),
                 resultado.getSaldoOperativo()
         );
 
-        verify(cuentaRepository)
-                .save(cuenta);
-
+        verify(cuentaRepository).save(cuenta);
         verify(transaccionRepository)
                 .save(any(Transaccion.class));
     }
@@ -806,25 +1108,30 @@ class CuentaFinancieraServiceTest {
     @Test
     void deberiaRechazarExtraccionSinSaldoSuficiente() {
         UUID cuentaId = UUID.randomUUID();
+        UUID titularId = UUID.randomUUID();
 
-        CuentaCorriente cuenta =
-                new CuentaCorriente();
+        Cliente titular = Cliente.builder()
+                .id(titularId)
+                .build();
 
+        CuentaCorriente cuenta = new CuentaCorriente();
+        cuenta.setId(cuentaId);
         cuenta.setEstado(EstadoCuenta.ACTIVA);
-        cuenta.setSaldoOperativo(
-                new BigDecimal("100.00")
-        );
-        cuenta.setDescubiertoAutorizado(
-                BigDecimal.ZERO
-        );
+        cuenta.setSaldoOperativo(new BigDecimal("100.00"));
+        cuenta.setDescubiertoAutorizado(BigDecimal.ZERO);
+        cuenta.getTitulares().add(titular);
 
         when(cuentaRepository.findById(cuentaId))
                 .thenReturn(Optional.of(cuenta));
+
+        when(clienteRepository.findById(titularId))
+                .thenReturn(Optional.of(titular));
 
         assertThrows(
                 SaldoInsuficienteException.class,
                 () -> cuentaService.extraer(
                         cuentaId,
+                        titularId,
                         new BigDecimal("150.00")
                 )
         );
@@ -834,13 +1141,7 @@ class CuentaFinancieraServiceTest {
                 cuenta.getSaldoOperativo()
         );
 
-        verify(
-                cuentaRepository,
-                never()
-        ).save(any());
-
-        verifyNoInteractions(
-                transaccionRepository
-        );
+        verify(cuentaRepository, never()).save(any());
+        verifyNoInteractions(transaccionRepository);
     }
 }
