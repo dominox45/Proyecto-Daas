@@ -8,3 +8,7 @@ spring:
     show-sql: true
     hibernate:
       ddl-auto: update
+  app:
+    comisiones:
+      cuenta-corriente: ${COMISION_CUENTA_CORRIENTE:5000.00}
+      caja-ahorro: ${COMISION_CAJA_AHORRO:2000.00}
