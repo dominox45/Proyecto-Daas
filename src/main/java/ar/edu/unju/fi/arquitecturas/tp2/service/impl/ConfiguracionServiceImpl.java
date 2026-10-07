@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.context.ApplicationEventPublisher;
+import ar.edu.unju.fi.arquitecturas.tp2.event.ConfiguracionActualizadaEvent;
 
 /**
  * Implementación del servicio de configuración general del sistema.
@@ -40,15 +42,20 @@ import java.util.stream.Collectors;
 public class ConfiguracionServiceImpl implements ConfiguracionService {
 
     private final ConfiguracionGeneralRepository configuracionRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
-     * Crea el servicio utilizando el repositorio de configuración general.
+     * Crea el servicio utilizando el repositorio de configuración general y el publicador de eventos.
      *
      * @param configuracionRepository repositorio utilizado para consultar
      *                                y persistir los parámetros
+     * @param eventPublisher          publicador utilizado para emitir eventos de dominio
      */
-    public ConfiguracionServiceImpl(ConfiguracionGeneralRepository configuracionRepository) {
+    public ConfiguracionServiceImpl(
+            ConfiguracionGeneralRepository configuracionRepository,
+            ApplicationEventPublisher eventPublisher) {
         this.configuracionRepository = configuracionRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -109,7 +116,8 @@ public class ConfiguracionServiceImpl implements ConfiguracionService {
      * <p>
      * Antes de persistir el cambio, verifica de manera estricta que el nuevo valor
      * en formato texto sea compatible con el {@link TipoDatoConfiguracion} original
-     * del registro.
+     * del registro. Tras una actualización exitosa, emite un evento de dominio
+     * para notificar al resto del sistema.
      * </p>
      */
     @Override
@@ -124,6 +132,9 @@ public class ConfiguracionServiceImpl implements ConfiguracionService {
         ConfiguracionGeneral actualizada = configuracionRepository.save(config);
 
         log.info("Configuración '{}' actualizada con el valor: {}", clave, actualizada.getValor());
+
+        // Notificar al sistema que la configuración cambió
+        eventPublisher.publishEvent(new ConfiguracionActualizadaEvent(clave, actualizada.getValor()));
 
         return mapearAResponse(actualizada);
     }
