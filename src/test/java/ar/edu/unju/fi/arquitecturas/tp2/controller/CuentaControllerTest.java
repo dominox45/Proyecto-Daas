@@ -7,6 +7,8 @@ import ar.edu.unju.fi.arquitecturas.tp2.exception.RecursoNoEncontradoException;
 import ar.edu.unju.fi.arquitecturas.tp2.model.enums.EstadoCuenta;
 import ar.edu.unju.fi.arquitecturas.tp2.model.enums.TipoCuenta;
 import ar.edu.unju.fi.arquitecturas.tp2.service.CuentaFinancieraService;
+import ar.edu.unju.fi.arquitecturas.tp2.dto.ExtraccionRequestDto;
+import ar.edu.unju.fi.arquitecturas.tp2.exception.SaldoInsuficienteException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -14,6 +16,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
@@ -48,7 +52,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * </p>
  *
  * @author MaxDz
- * @version 1.0.0
+ * @version 1.1.0
  * @see CuentaController
  * @see CuentaFinancieraService
  * @see GlobalExceptionHandler
@@ -332,6 +336,177 @@ class CuentaControllerTest {
                 .andExpect(
                         jsonPath("$.message")
                                 .value("La cuenta no existe")
+                );
+    }
+
+    /**
+     * Verifica que una extracción válida responda HTTP 204
+     * y delegue correctamente la operación a la capa Service.
+     *
+     * @throws Exception si ocurre un error durante la simulación
+     *                   de la petición HTTP
+     */
+    @Test
+    void deberiaExtraerYResponder204()
+            throws Exception {
+
+        UUID cuentaId = UUID.randomUUID();
+        UUID operadorId = UUID.randomUUID();
+
+        ExtraccionRequestDto request =
+                new ExtraccionRequestDto(
+                        operadorId,
+                        new BigDecimal("250.00")
+                );
+
+        mockMvc.perform(
+                        post(
+                                "/api/v1/cuentas/{cuentaId}/extracciones",
+                                cuentaId
+                        )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(request)
+                                )
+                )
+                .andExpect(status().isNoContent());
+
+        verify(cuentaService).extraer(
+                cuentaId,
+                operadorId,
+                new BigDecimal("250.00")
+        );
+    }
+
+    /**
+     * Verifica que Jakarta Bean Validation rechace una extracción
+     * cuando el monto solicitado no es positivo.
+     *
+     * @throws Exception si ocurre un error durante la simulación
+     *                   de la petición HTTP
+     */
+    @Test
+    void deberiaRechazarExtraccionConMontoInvalido()
+            throws Exception {
+
+        ExtraccionRequestDto request =
+                new ExtraccionRequestDto(
+                        UUID.randomUUID(),
+                        BigDecimal.ZERO
+                );
+
+        mockMvc.perform(
+                        post(
+                                "/api/v1/cuentas/{cuentaId}/extracciones",
+                                UUID.randomUUID()
+                        )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(request)
+                                )
+                )
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Verifica que una extracción realizada por un operador
+     * no autorizado sea traducida a HTTP 400 (Bad Request).
+     *
+     * @throws Exception si ocurre un error durante la simulación
+     *                   de la petición HTTP
+     */
+    @Test
+    void deberiaResponder400CuandoOperadorNoEstaAutorizado()
+            throws Exception {
+
+        UUID cuentaId = UUID.randomUUID();
+        UUID operadorId = UUID.randomUUID();
+        BigDecimal monto = new BigDecimal("100.00");
+
+        ExtraccionRequestDto request =
+                new ExtraccionRequestDto(
+                        operadorId,
+                        monto
+                );
+
+        doThrow(
+                new IllegalStateException(
+                        "El adherente no está autorizado para extraer de esta cuenta"
+                )
+        ).when(cuentaService)
+                .extraer(
+                        cuentaId,
+                        operadorId,
+                        monto
+                );
+
+        mockMvc.perform(
+                        post(
+                                "/api/v1/cuentas/{cuentaId}/extracciones",
+                                cuentaId
+                        )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(request)
+                                )
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(
+                        jsonPath("$.message")
+                                .value(
+                                        "El adherente no está autorizado para extraer de esta cuenta"
+                                )
+                );
+    }
+
+    /**
+     * Verifica que la falta de saldo disponible sea traducida
+     * a HTTP 409 (Conflict).
+     *
+     * @throws Exception si ocurre un error durante la simulación
+     *                   de la petición HTTP
+     */
+    @Test
+    void deberiaResponder409CuandoSaldoEsInsuficiente()
+            throws Exception {
+
+        UUID cuentaId = UUID.randomUUID();
+        UUID operadorId = UUID.randomUUID();
+        BigDecimal monto = new BigDecimal("5000.00");
+
+        ExtraccionRequestDto request =
+                new ExtraccionRequestDto(
+                        operadorId,
+                        monto
+                );
+
+        doThrow(
+                new SaldoInsuficienteException(
+                        "Saldo insuficiente"
+                )
+        ).when(cuentaService)
+                .extraer(
+                        cuentaId,
+                        operadorId,
+                        monto
+                );
+
+        mockMvc.perform(
+                        post(
+                                "/api/v1/cuentas/{cuentaId}/extracciones",
+                                cuentaId
+                        )
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        objectMapper.writeValueAsString(request)
+                                )
+                )
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(
+                        jsonPath("$.message")
+                                .value("Saldo insuficiente")
                 );
     }
 }

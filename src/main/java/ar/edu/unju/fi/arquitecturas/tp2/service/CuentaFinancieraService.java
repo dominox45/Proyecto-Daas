@@ -24,7 +24,7 @@ import java.util.UUID;
  * </p>
  *
  * @author MaxDz
- * @version 1.0.0
+ * @version 1.1.0
  * @see CuentaFinanciera
  * @see CuentaRequestDto
  * @see CuentaResponseDto
@@ -33,12 +33,6 @@ public interface CuentaFinancieraService {
 
     /**
      * Registra una nueva cuenta financiera asociada a un cliente.
-     *
-     * <p>
-     * La implementación determina el subtipo de cuenta solicitado,
-     * valida las reglas de negocio correspondientes y persiste
-     * la nueva cuenta.
-     * </p>
      *
      * @param request datos necesarios para crear la cuenta
      * @return DTO con los datos de la cuenta registrada
@@ -71,7 +65,14 @@ public interface CuentaFinancieraService {
     CuentaFinanciera depositar(UUID cuentaId, BigDecimal monto);
 
     /**
-     * Realiza una extracción sobre una cuenta existente.
+     * Realiza una extracción sobre una cuenta existente identificando
+     * al cliente que ejecuta la operación.
+     *
+     * <p>
+     * Un cliente titular solamente puede operar sobre cuentas de las
+     * que sea titular. Un cliente adherente solamente puede realizar
+     * extracciones sobre cuentas correspondientes a su titular.
+     * </p>
      *
      * <p>
      * En una cuenta corriente la implementación puede considerar
@@ -79,13 +80,19 @@ public interface CuentaFinancieraService {
      * </p>
      *
      * @param cuentaId identificador de la cuenta
+     * @param operadorId identificador del cliente que realiza la extracción
      * @param monto monto que se desea extraer
      * @return cuenta financiera actualizada
-     * @throws IllegalArgumentException si el monto es nulo o no es positivo
-     * @throws RecursoNoEncontradoException si la cuenta no existe
+     * @throws IllegalArgumentException si algún dato obligatorio es inválido
+     * @throws RecursoNoEncontradoException si la cuenta o el operador no existen
      * @throws IllegalStateException si la cuenta no se encuentra activa
+     *                               o el operador no está autorizado
      * @throws SaldoInsuficienteException si los fondos disponibles
      *                                    no alcanzan para realizar la extracción
      */
-    CuentaFinanciera extraer(UUID cuentaId, BigDecimal monto);
+    CuentaFinanciera extraer(
+            UUID cuentaId,
+            UUID operadorId,
+            BigDecimal monto
+    );
 }

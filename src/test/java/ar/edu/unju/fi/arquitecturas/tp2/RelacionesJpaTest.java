@@ -312,4 +312,136 @@ class RelacionesJpaTest {
         );
         assertNull(transaccionRecuperada.getOperador());
     }
+
+    @Test
+    @Transactional
+    void deberiaPersistirCuentaAutorizadaParaAdherente() {
+        Cliente titular = new Cliente();
+        titular.setNombre("Titular Autorizacion");
+        titular.setCuil("20666666661");
+
+        Cliente adherente = new Cliente();
+        adherente.setNombre("Adherente Autorizacion");
+        adherente.setCuil("27666666662");
+        adherente.setTitular(titular);
+
+        CajaDeAhorro cuenta = new CajaDeAhorro();
+        cuenta.setCbu("4444555566667777888899");
+        cuenta.setAlias("PRUEBA.ADHERENTE.01");
+        cuenta.setSaldoOperativo(new BigDecimal("10000.00"));
+        cuenta.setEstado(EstadoCuenta.ACTIVA);
+        cuenta.setTasaInteresAnual(new BigDecimal("0.050000"));
+        cuenta.setLimiteExtraccionesMensualesSinCosto(5);
+
+        /*
+         * Persistimos explícitamente porque las relaciones
+         * no dependen de cascadas para crear las entidades.
+         */
+        entityManager.persist(titular);
+        entityManager.persist(adherente);
+        entityManager.persist(cuenta);
+
+        /*
+         * La cuenta pertenece al titular.
+         */
+        titular.agregarCuenta(cuenta);
+
+        /*
+         * El adherente recibe autorización explícita
+         * únicamente para operar sobre esta cuenta.
+         */
+        adherente.autorizarCuenta(cuenta);
+
+        entityManager.flush();
+
+        UUID titularId = titular.getId();
+        UUID adherenteId = adherente.getId();
+        UUID cuentaId = cuenta.getId();
+
+        /*
+         * Limpiamos el contexto para asegurarnos de que
+         * los datos siguientes se recuperen realmente desde la BD.
+         */
+        entityManager.clear();
+
+        Cliente adherenteRecuperado =
+                entityManager.find(
+                        Cliente.class,
+                        adherenteId
+                );
+
+        CuentaFinanciera cuentaRecuperada =
+                entityManager.find(
+                        CuentaFinanciera.class,
+                        cuentaId
+                );
+
+        assertNotNull(adherenteRecuperado);
+        assertNotNull(cuentaRecuperada);
+
+        /*
+         * La relación familiar debe mantenerse.
+         */
+        assertNotNull(
+                adherenteRecuperado.getTitular()
+        );
+
+        assertEquals(
+                titularId,
+                adherenteRecuperado
+                        .getTitular()
+                        .getId()
+        );
+
+        /*
+         * La autorización por cuenta debe persistirse.
+         */
+        assertEquals(
+                1,
+                adherenteRecuperado
+                        .getCuentasAutorizadas()
+                        .size()
+        );
+
+        assertTrue(
+                adherenteRecuperado
+                        .getCuentasAutorizadas()
+                        .stream()
+                        .anyMatch(cuentaAutorizada ->
+                                cuentaAutorizada
+                                        .getId()
+                                        .equals(cuentaId)
+                        )
+        );
+
+        /*
+         * Autorizar una cuenta no convierte al adherente
+         * en titular o propietario de ella.
+         */
+        assertTrue(
+                adherenteRecuperado
+                        .getCuentas()
+                        .isEmpty()
+        );
+
+        assertTrue(
+                cuentaRecuperada
+                        .getTitulares()
+                        .stream()
+                        .anyMatch(cliente ->
+                                cliente.getId()
+                                        .equals(titularId)
+                        )
+        );
+
+        assertTrue(
+                cuentaRecuperada
+                        .getTitulares()
+                        .stream()
+                        .noneMatch(cliente ->
+                                cliente.getId()
+                                        .equals(adherenteId)
+                        )
+        );
+    }
 }

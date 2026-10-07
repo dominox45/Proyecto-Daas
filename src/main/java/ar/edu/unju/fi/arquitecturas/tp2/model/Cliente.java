@@ -18,9 +18,16 @@ import java.util.UUID;
  * </p>
  *
  * <p>
- * A partir del TP5, todo cliente posee además un estado de activación
- * y puede almacenar la información necesaria para completar el proceso
- * de activación mediante token.
+ * A partir del TP5, un cliente puede pertenecer a un grupo familiar
+ * mediante la referencia a otro cliente como titular principal.
+ * Los clientes adherentes pueden además poseer un conjunto explícito
+ * de cuentas autorizadas sobre las cuales podrán realizar extracciones.
+ * </p>
+ *
+ * <p>
+ * Todo cliente posee además un estado de activación y puede almacenar
+ * la información necesaria para completar el proceso de activación
+ * mediante token.
  * </p>
  *
  * <p>
@@ -106,12 +113,22 @@ public class Cliente extends EntidadAuditable {
     @Column(name = "fecha_activacion")
     private LocalDateTime fechaActivacion;
 
-    /** Cliente al que este cliente referencia como titular principal. */
+    /**
+     * Cliente titular principal del grupo familiar.
+     *
+     * <p>
+     * Si este atributo es nulo, el cliente se considera titular.
+     * Si contiene una referencia, el cliente se considera adherente
+     * del cliente referenciado.
+     * </p>
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "titular_id")
     private Cliente titular;
 
-    /** Cuentas financieras de las que el cliente es titular. */
+    /**
+     * Cuentas financieras de las que el cliente es titular.
+     */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "clientes_cuentas",
@@ -122,14 +139,37 @@ public class Cliente extends EntidadAuditable {
     private Set<CuentaFinanciera> cuentas = new HashSet<>();
 
     /**
-     * Asocia una cuenta al cliente y actualiza sus titulares en memoria.
+     * Cuentas pertenecientes al titular sobre las que este cliente,
+     * cuando actúa como adherente, fue autorizado explícitamente
+     * para realizar extracciones.
+     *
+     * <p>
+     * Esta relación es independiente de {@link #cuentas}, ya que una
+     * autorización de operación no convierte al adherente en titular
+     * de la cuenta.
+     * </p>
+     */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "adherentes_cuentas_autorizadas",
+            joinColumns = @JoinColumn(name = "adherente_id"),
+            inverseJoinColumns = @JoinColumn(name = "cuenta_id")
+    )
+    @Builder.Default
+    private Set<CuentaFinanciera> cuentasAutorizadas = new HashSet<>();
+
+    /**
+     * Asocia una cuenta al cliente como titular y actualiza
+     * ambos lados de la relación en memoria.
      *
      * @param cuenta cuenta que se desea asociar
      * @throws IllegalArgumentException si la cuenta es nula
      */
     public void agregarCuenta(CuentaFinanciera cuenta) {
         if (cuenta == null) {
-            throw new IllegalArgumentException("La cuenta no puede ser nula");
+            throw new IllegalArgumentException(
+                    "La cuenta no puede ser nula"
+            );
         }
 
         if (cuentas.add(cuenta)) {
@@ -138,13 +178,49 @@ public class Cliente extends EntidadAuditable {
     }
 
     /**
-     * Desasocia una cuenta del cliente y actualiza sus titulares en memoria.
+     * Desasocia una cuenta de aquellas en las que el cliente
+     * figura como titular.
      *
      * @param cuenta cuenta que se desea desasociar
      */
     public void quitarCuenta(CuentaFinanciera cuenta) {
         if (cuenta != null && cuentas.remove(cuenta)) {
             cuenta.getTitulares().remove(this);
+        }
+    }
+
+    /**
+     * Agrega una cuenta al conjunto de cuentas autorizadas
+     * para operar como adherente.
+     *
+     * <p>
+     * Las reglas que determinan si la cuenta pertenece realmente
+     * al titular del adherente deben validarse previamente
+     * en la capa de servicios.
+     * </p>
+     *
+     * @param cuenta cuenta que se desea autorizar
+     * @throws IllegalArgumentException si la cuenta es nula
+     */
+    public void autorizarCuenta(CuentaFinanciera cuenta) {
+        if (cuenta == null) {
+            throw new IllegalArgumentException(
+                    "La cuenta autorizada no puede ser nula"
+            );
+        }
+
+        cuentasAutorizadas.add(cuenta);
+    }
+
+    /**
+     * Elimina una cuenta del conjunto de cuentas autorizadas
+     * para operar como adherente.
+     *
+     * @param cuenta cuenta cuya autorización se desea revocar
+     */
+    public void revocarCuentaAutorizada(CuentaFinanciera cuenta) {
+        if (cuenta != null) {
+            cuentasAutorizadas.remove(cuenta);
         }
     }
 }

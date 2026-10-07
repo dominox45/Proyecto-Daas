@@ -13,6 +13,8 @@ import ar.edu.unju.fi.arquitecturas.tp2.model.enums.TipoTransaccion;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.CuentaFinancieraRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.TransaccionRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.service.TransferenciaService;
+import ar.edu.unju.fi.arquitecturas.tp2.model.Cliente;
+import ar.edu.unju.fi.arquitecturas.tp2.repository.ClienteRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -33,6 +35,7 @@ public class TransferenciaServiceImpl implements TransferenciaService {
 
     private final CuentaFinancieraRepository cuentaRepository;
     private final TransaccionRepository transaccionRepository;
+    private final ClienteRepository clienteRepository;
 
     /**
      * Constructor para la inyección de dependencias.
@@ -42,9 +45,12 @@ public class TransferenciaServiceImpl implements TransferenciaService {
      */
     public TransferenciaServiceImpl(
             CuentaFinancieraRepository cuentaRepository,
-            TransaccionRepository transaccionRepository) {
+            TransaccionRepository transaccionRepository,
+            ClienteRepository clienteRepository) {
+
         this.cuentaRepository = cuentaRepository;
         this.transaccionRepository = transaccionRepository;
+        this.clienteRepository = clienteRepository;
     }
 
     /**
@@ -60,6 +66,24 @@ public class TransferenciaServiceImpl implements TransferenciaService {
 
         validarRequest(request);
 
+        Cliente operador = clienteRepository.findById(
+                        request.getOperadorId())
+                .orElseThrow(() ->
+                        new RecursoNoEncontradoException(
+                                "El operador no existe"
+                        )
+                );
+
+        /*
+         * Regla del TP5:
+         * un cliente adherente solamente puede realizar extracciones.
+         */
+        if (operador.getTitular() != null) {
+            throw new IllegalStateException(
+                    "Los clientes adherentes solo pueden realizar extracciones"
+            );
+        }
+
         CuentaFinanciera origen = cuentaRepository.findById(
                         request.getCuentaOrigenId())
                 .orElseThrow(() ->
@@ -73,6 +97,22 @@ public class TransferenciaServiceImpl implements TransferenciaService {
                                 "La cuenta de destino no existe"));
 
         validarCuentasActivas(origen, destino);
+
+        boolean operadorEsTitularDeOrigen =
+                origen.getTitulares()
+                        .stream()
+                        .anyMatch(titular ->
+                                titular.getId() != null
+                                        && titular.getId().equals(
+                                        operador.getId()
+                                )
+                        );
+
+        if (!operadorEsTitularDeOrigen) {
+            throw new IllegalStateException(
+                    "El operador no está autorizado para transferir desde esta cuenta"
+            );
+        }
 
         BigDecimal monto = request.getMonto();
 
@@ -95,6 +135,7 @@ public class TransferenciaServiceImpl implements TransferenciaService {
                 .tipo(TipoTransaccion.TRANSFERENCIA_ENVIADA)
                 .estadoTransaccion(EstadoTransaccion.COMPLETADA)
                 .cuenta(origen)
+                .operador(operador)
                 .build();
 
         Transaccion recibida = Transaccion.builder()
@@ -103,6 +144,7 @@ public class TransferenciaServiceImpl implements TransferenciaService {
                 .tipo(TipoTransaccion.TRANSFERENCIA_RECIBIDA)
                 .estadoTransaccion(EstadoTransaccion.COMPLETADA)
                 .cuenta(destino)
+                .operador(operador)
                 .build();
 
         transaccionRepository.save(enviada);
@@ -133,6 +175,12 @@ public class TransferenciaServiceImpl implements TransferenciaService {
         if (request == null) {
             throw new IllegalArgumentException(
                     "La solicitud de transferencia es obligatoria");
+        }
+
+        if (request.getOperadorId() == null) {
+            throw new IllegalArgumentException(
+                    "El operador es obligatorio"
+            );
         }
 
         if (request.getCuentaOrigenId() == null
