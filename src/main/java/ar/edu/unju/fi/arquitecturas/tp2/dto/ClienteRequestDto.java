@@ -23,6 +23,7 @@ public class ClienteRequestDto {
     @Pattern(regexp = "\\d{11}", message = "El CUIL debe contener exactamente 11 dígitos")
     private String cuil;
 
+    @NotBlank
     @Email
     @Size(max = 254)
     private String email;

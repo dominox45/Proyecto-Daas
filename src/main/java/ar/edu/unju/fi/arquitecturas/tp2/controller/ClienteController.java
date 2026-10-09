@@ -124,4 +124,18 @@ public class ClienteController {
 
         return ResponseEntity.noContent().build();
     }
+    /**
+     * Confirma la activación de un cliente mediante su token.
+     *
+     * @param token token enviado al correo del cliente
+     * @return respuesta HTTP 204 cuando la activación es exitosa
+     */
+    @GetMapping("/activar")
+    public ResponseEntity<Void> activar(
+            @RequestParam String token) {
+
+        clienteService.activar(token);
+
+        return ResponseEntity.noContent().build();
+    }
 }

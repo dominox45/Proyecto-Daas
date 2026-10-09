@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -64,6 +65,13 @@ class ClienteServiceTest {
      */
     @Mock
     private CuentaFinancieraRepository cuentaRepository;
+
+    /**
+     * Publicador simulado para los eventos generados
+     * durante el alta de clientes.
+     */
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     /**
      * Servicio bajo prueba con sus dependencias simuladas.

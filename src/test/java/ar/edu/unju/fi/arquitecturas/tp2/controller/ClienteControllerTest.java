@@ -24,6 +24,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 /**
  * Pruebas de la capa web para {@link ClienteController}.
@@ -435,5 +436,111 @@ class ClienteControllerTest {
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message")
                         .value("La cuenta no existe"));
+    }
+
+    /**
+     * Verifica que un token válido permita activar al cliente
+     * y produzca una respuesta HTTP 204 (No Content).
+     *
+     * @throws Exception si ocurre un error durante la simulación
+     *                   de la petición HTTP
+     */
+    @Test
+    void deberiaActivarClienteYResponder204()
+            throws Exception {
+
+        String token =
+                UUID.randomUUID().toString();
+
+        mockMvc.perform(
+                        get("/api/v1/clientes/activar")
+                                .param("token", token)
+                )
+                .andExpect(status().isNoContent());
+
+        verify(clienteService)
+                .activar(token);
+    }
+
+    /**
+     * Verifica que un token inexistente sea traducido
+     * a una respuesta HTTP 400 (Bad Request).
+     *
+     * @throws Exception si ocurre un error durante la simulación
+     *                   de la petición HTTP
+     */
+    @Test
+    void deberiaResponder400CuandoTokenNoExiste()
+            throws Exception {
+
+        String token =
+                UUID.randomUUID().toString();
+
+        doThrow(
+                new IllegalArgumentException(
+                        "El token de activación no existe"
+                )
+        ).when(clienteService)
+                .activar(token);
+
+        mockMvc.perform(
+                        get("/api/v1/clientes/activar")
+                                .param("token", token)
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(
+                        jsonPath("$.status")
+                                .value(400)
+                )
+                .andExpect(
+                        jsonPath("$.message")
+                                .value(
+                                        "El token de activación no existe"
+                                )
+                );
+
+        verify(clienteService)
+                .activar(token);
+    }
+
+    /**
+     * Verifica que un token vencido sea traducido
+     * a una respuesta HTTP 400 (Bad Request).
+     *
+     * @throws Exception si ocurre un error durante la simulación
+     *                   de la petición HTTP
+     */
+    @Test
+    void deberiaResponder400CuandoTokenEstaVencido()
+            throws Exception {
+
+        String token =
+                UUID.randomUUID().toString();
+
+        doThrow(
+                new IllegalArgumentException(
+                        "El token de activación está vencido"
+                )
+        ).when(clienteService)
+                .activar(token);
+
+        mockMvc.perform(
+                        get("/api/v1/clientes/activar")
+                                .param("token", token)
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(
+                        jsonPath("$.status")
+                                .value(400)
+                )
+                .andExpect(
+                        jsonPath("$.message")
+                                .value(
+                                        "El token de activación está vencido"
+                                )
+                );
+
+        verify(clienteService)
+                .activar(token);
     }
 }
