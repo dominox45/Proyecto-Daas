@@ -9,7 +9,25 @@ spring:
     hibernate:
       ddl-auto: update
 
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 app:
   comisiones:
     cuenta-corriente: ${COMISION_CUENTA_CORRIENTE:5000.00}
     caja-ahorro: ${COMISION_CAJA_AHORRO:2000.00}
+
+  activacion:
+    base-url: ${ACTIVACION_BASE_URL:http://localhost:8080/api/v1/clientes/activar}
+
+  email:
+    remitente: "${MAIL_FROM:${MAIL_USERNAME:}}"

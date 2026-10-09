@@ -8,12 +8,16 @@ import ar.edu.unju.fi.arquitecturas.tp2.model.CuentaFinanciera;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.ClienteRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.CuentaFinancieraRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.service.ClienteService;
+import ar.edu.unju.fi.arquitecturas.tp2.event.ClienteCreadoEvent;
+import ar.edu.unju.fi.arquitecturas.tp2.model.enums.EstadoCliente;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 /**
  * Implementación del contrato {@link ClienteService} para la gestión
@@ -60,6 +64,12 @@ public class ClienteServiceImpl implements ClienteService {
     private final CuentaFinancieraRepository cuentaRepository;
 
     /**
+     * Publicador utilizado para emitir eventos de dominio
+     * relacionados con el ciclo de vida del cliente.
+     */
+    private final ApplicationEventPublisher eventPublisher;
+
+    /**
      * Construye el servicio utilizando inyección de dependencias
      * mediante constructor.
      *
@@ -68,10 +78,12 @@ public class ClienteServiceImpl implements ClienteService {
      */
     public ClienteServiceImpl(
             ClienteRepository clienteRepository,
-            CuentaFinancieraRepository cuentaRepository) {
+            CuentaFinancieraRepository cuentaRepository,
+            ApplicationEventPublisher eventPublisher) {
 
         this.clienteRepository = clienteRepository;
         this.cuentaRepository = cuentaRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -91,16 +103,46 @@ public class ClienteServiceImpl implements ClienteService {
      *                                  o correo electrónico
      */
     @Override
-    public ClienteResponseDto crear(ClienteRequestDto request) {
+    @Transactional
+    public ClienteResponseDto crear(
+            ClienteRequestDto request) {
+
         validarDuplicados(request);
 
         Cliente cliente = mapearAEntidad(request);
-        Cliente clienteGuardado = clienteRepository.save(cliente);
+
+        LocalDateTime fechaAlta =
+                LocalDateTime.now();
+
+        cliente.setEstado(
+                EstadoCliente.PENDIENTE_ACTIVACION
+        );
+
+        cliente.setTokenActivacion(
+                UUID.randomUUID().toString()
+        );
+
+        cliente.setTokenActivacionExpiraEn(
+                fechaAlta.plusHours(24)
+        );
+
+        Cliente clienteGuardado =
+                clienteRepository.save(cliente);
+
+        eventPublisher.publishEvent(
+                new ClienteCreadoEvent(
+                        clienteGuardado.getId(),
+                        clienteGuardado.getNombre(),
+                        clienteGuardado.getEmail(),
+                        clienteGuardado.getTokenActivacion()
+                )
+        );
 
         log.info(
-                "Cliente creado correctamente. id={}, cuil={}",
+                "Cliente creado correctamente. id={}, cuil={}, estado={}",
                 clienteGuardado.getId(),
-                clienteGuardado.getCuil()
+                clienteGuardado.getCuil(),
+                clienteGuardado.getEstado()
         );
 
         return mapearAResponse(clienteGuardado);
@@ -421,6 +463,64 @@ public class ClienteServiceImpl implements ClienteService {
                 cliente.getEmail(),
                 cliente.getTelefono(),
                 cliente.getDireccion()
+        );
+    }
+    /**
+     * Activa un cliente cuando el token informado existe y continúa vigente.
+     *
+     * @param token token recibido desde el enlace de activación
+     * @throws IllegalArgumentException si el token es vacío,
+     *                                  inexistente o está vencido
+     */
+    @Override
+    @Transactional
+    public void activar(String token) {
+
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException(
+                    "El token de activación es obligatorio"
+            );
+        }
+
+        Cliente cliente =
+                clienteRepository
+                        .findByTokenActivacion(token)
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "El token de activación no existe"
+                                )
+                        );
+
+        LocalDateTime ahora =
+                LocalDateTime.now();
+
+        if (cliente.getTokenActivacionExpiraEn() == null
+                || !cliente.getTokenActivacionExpiraEn()
+                .isAfter(ahora)) {
+
+            throw new IllegalArgumentException(
+                    "El token de activación está vencido"
+            );
+        }
+
+        cliente.setEstado(
+                EstadoCliente.ACTIVO
+        );
+
+        cliente.setFechaActivacion(ahora);
+
+        /*
+         * El token deja de ser reutilizable una vez completada
+         * correctamente la activación.
+         */
+        cliente.setTokenActivacion(null);
+        cliente.setTokenActivacionExpiraEn(null);
+
+        clienteRepository.save(cliente);
+
+        log.info(
+                "Cliente activado correctamente. id={}",
+                cliente.getId()
         );
     }
 }

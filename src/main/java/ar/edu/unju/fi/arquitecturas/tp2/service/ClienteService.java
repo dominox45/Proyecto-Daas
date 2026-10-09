@@ -104,6 +104,14 @@ public interface ClienteService {
     );
 
     /**
+     * Activa un cliente utilizando el token generado durante su alta.
+     *
+     * @param token token de activación recibido desde el enlace de confirmación
+     * @throws IllegalArgumentException si el token es inválido o está vencido
+     */
+    void activar(String token);
+
+    /**
      * Persiste un cliente en la base de datos.
      *
      * <p>
