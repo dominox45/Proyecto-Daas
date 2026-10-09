@@ -17,12 +17,15 @@ import ar.edu.unju.fi.arquitecturas.tp2.repository.ClienteRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.CuentaFinancieraRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.TransaccionRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.service.impl.CuentaFinancieraServiceImpl;
+import ar.edu.unju.fi.arquitecturas.tp2.util.ClavesConfiguracion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import static org.mockito.Mockito.lenient;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -86,11 +89,50 @@ class CuentaFinancieraServiceTest {
     private ClienteRepository clienteRepository;
 
     /**
+     * Servicio simulado para recuperar los límites dinámicos
+     * de extracción.
+     */
+    @Mock
+    private ConfiguracionService configuracionService;
+
+    /**
      * Servicio bajo prueba con las dependencias simuladas
      * inyectadas automáticamente por Mockito.
      */
     @InjectMocks
     private CuentaFinancieraServiceImpl cuentaService;
+
+    /**
+     * Configura valores predeterminados para las pruebas de extracción
+     * existentes, evitando que la nueva regla de límites diarios
+     * modifique el objetivo original de esos casos de prueba.
+     */
+    @BeforeEach
+    void configurarLimitesDeExtraccionPorDefecto() {
+
+        lenient()
+                .when(configuracionService.obtenerValorDecimal(
+                        ClavesConfiguracion.LIMITE_EXTRACCION_TITULAR
+                ))
+                .thenReturn(new BigDecimal("100000.00"));
+
+        lenient()
+                .when(configuracionService.obtenerValorDecimal(
+                        ClavesConfiguracion.LIMITE_EXTRACCION_ADHERENTE
+                ))
+                .thenReturn(new BigDecimal("70000.00"));
+
+        lenient()
+                .when(transaccionRepository
+                        .sumarMontoPorOperadorTipoEstadoYPeriodo(
+                                any(),
+                                any(),
+                                any(),
+                                any(),
+                                any()
+                        ))
+                .thenReturn(BigDecimal.ZERO);
+    }
 
     /**
      * Verifica que pueda crearse correctamente una caja de ahorro
