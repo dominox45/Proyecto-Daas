@@ -4,9 +4,9 @@ import ar.edu.unju.fi.arquitecturas.tp2.event.ConfiguracionActualizadaEvent;
 import ar.edu.unju.fi.arquitecturas.tp2.service.ComisionService;
 import ar.edu.unju.fi.arquitecturas.tp2.service.ConfiguracionService;
 import ar.edu.unju.fi.arquitecturas.tp2.util.ClavesConfiguracion;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
@@ -19,9 +19,20 @@ import java.util.concurrent.ScheduledFuture;
  * del cobro de comisiones.
  *
  * <p>
- * A diferencia del @Scheduled estático, este scheduler lee su expresión Cron
- * desde la base de datos al iniciar. Además, escucha eventos de actualización
- * para reprogramarse en caliente si el administrador modifica el horario.
+ * A diferencia de un {@code @Scheduled} estático, este scheduler obtiene
+ * su expresión Cron desde la configuración general almacenada en la base
+ * de datos.
+ * </p>
+ *
+ * <p>
+ * La programación inicial se realiza cuando la aplicación se encuentra
+ * completamente inicializada, garantizando que los parámetros generales
+ * hayan sido creados previamente.
+ * </p>
+ *
+ * <p>
+ * Además, escucha eventos de actualización de configuración para
+ * reprogramar la tarea dinámicamente cuando cambia la expresión Cron.
  * </p>
  */
 @Slf4j
@@ -34,48 +45,115 @@ public class ComisionScheduler {
 
     private ScheduledFuture<?> tareaActual;
 
+    /**
+     * Construye el scheduler mediante inyección de dependencias.
+     *
+     * @param taskScheduler servicio encargado de programar tareas
+     * @param comisionService servicio que ejecuta la liquidación de comisiones
+     * @param configuracionService servicio para consultar la configuración general
+     */
     public ComisionScheduler(
             @Qualifier("taskScheduler") TaskScheduler taskScheduler,
             ComisionService comisionService,
             ConfiguracionService configuracionService) {
+
         this.taskScheduler = taskScheduler;
         this.comisionService = comisionService;
         this.configuracionService = configuracionService;
     }
 
-    @PostConstruct
-    public void iniciarProgramacion() {
+    /**
+     * Realiza la programación inicial cuando Spring Boot terminó de
+     * inicializar el contexto y ejecutar los runners de la aplicación.
+     *
+     * <p>
+     * De esta forma, {@code ConfiguracionInicializador} ya tuvo la
+     * oportunidad de crear {@code CRON_LIQUIDACION_COMISIONES}
+     * en una base de datos nueva.
+     * </p>
+     *
+     * @param evento evento emitido cuando la aplicación está lista
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void iniciarProgramacion(ApplicationReadyEvent evento) {
         programarTarea();
     }
 
+    /**
+     * Reacciona ante modificaciones de la configuración general.
+     *
+     * <p>
+     * Solamente una modificación de la expresión Cron de liquidación
+     * provoca la reprogramación de esta tarea.
+     * </p>
+     *
+     * @param evento configuración que fue modificada
+     */
     @EventListener
-    public void alActualizarConfiguracion(ConfiguracionActualizadaEvent evento) {
-        if (ClavesConfiguracion.CRON_LIQUIDACION_COMISIONES.equals(evento.clave())) {
-            log.warn("Se detectó un cambio en el CRON de comisiones. Reprogramando tarea...");
+    public void alActualizarConfiguracion(
+            ConfiguracionActualizadaEvent evento) {
+
+        if (ClavesConfiguracion.CRON_LIQUIDACION_COMISIONES
+                .equals(evento.clave())) {
+
+            log.info(
+                    "Se detectó un cambio en el CRON de comisiones. Reprogramando tarea..."
+            );
+
             programarTarea();
         }
     }
 
+    /**
+     * Cancela la programación anterior, si existe, y programa una nueva
+     * ejecución utilizando la expresión Cron almacenada en la configuración
+     * general.
+     */
     private synchronized void programarTarea() {
-        if (tareaActual != null && !tareaActual.isCancelled()) {
-            tareaActual.cancel(false);
-            log.info("Tarea de liquidación anterior cancelada.");
-        }
 
-        String expresionCron = configuracionService.obtenerValorTexto(ClavesConfiguracion.CRON_LIQUIDACION_COMISIONES);
-        log.info("Programando próxima liquidación de comisiones con CRON: [{}]", expresionCron);
+        String expresionCron =
+                configuracionService.obtenerValorTexto(
+                        ClavesConfiguracion.CRON_LIQUIDACION_COMISIONES
+                );
+
+        CronTrigger cronTrigger;
 
         try {
-            tareaActual = taskScheduler.schedule(
-                    () -> {
-                        log.info(">>> DISPARADOR CRON: Ejecutando liquidación mensual de comisiones...");
-                        comisionService.liquidarComisionesMensuales();
-                        log.info("<<< DISPARADOR CRON: Ejecución finalizada.");
-                    },
-                    new CronTrigger(expresionCron)
-            );
+            cronTrigger = new CronTrigger(expresionCron);
         } catch (IllegalArgumentException e) {
-            log.error("Fallo crítico al programar comisiones. La expresión CRON '{}' es inválida.", expresionCron);
+            log.error(
+                    "No se pudo programar la liquidación de comisiones. "
+                            + "La expresión CRON '{}' es inválida.",
+                    expresionCron
+            );
+            return;
         }
+
+        if (tareaActual != null && !tareaActual.isCancelled()) {
+            tareaActual.cancel(false);
+            log.info(
+                    "Tarea anterior de liquidación de comisiones cancelada."
+            );
+        }
+
+        tareaActual = taskScheduler.schedule(
+                () -> {
+                    log.info(
+                            "Ejecutando liquidación mensual de comisiones..."
+                    );
+
+                    comisionService.liquidarComisionesMensuales();
+
+                    log.info(
+                            "Liquidación mensual de comisiones finalizada."
+                    );
+                },
+                cronTrigger
+        );
+
+        log.info(
+                "Liquidación de comisiones programada con CRON: [{}]",
+                expresionCron
+        );
     }
 }
