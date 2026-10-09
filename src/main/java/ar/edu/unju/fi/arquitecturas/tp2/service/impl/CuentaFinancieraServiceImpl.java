@@ -17,6 +17,8 @@ import ar.edu.unju.fi.arquitecturas.tp2.repository.ClienteRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.CuentaFinancieraRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.repository.TransaccionRepository;
 import ar.edu.unju.fi.arquitecturas.tp2.service.CuentaFinancieraService;
+import ar.edu.unju.fi.arquitecturas.tp2.service.ConfiguracionService;
+import ar.edu.unju.fi.arquitecturas.tp2.util.ClavesConfiguracion;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.time.LocalDate;
 
 /**
  * Implementación del contrato {@link CuentaFinancieraService} para la gestión
@@ -72,6 +75,12 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
     private final ClienteRepository clienteRepository;
 
     /**
+     * Servicio utilizado para recuperar los límites dinámicos
+     * de extracción definidos en la configuración general.
+     */
+    private final ConfiguracionService configuracionService;
+
+    /**
      * Construye el servicio mediante inyección de dependencias por constructor.
      *
      * @param cuentaRepository      repositorio de cuentas financieras
@@ -81,11 +90,13 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
     public CuentaFinancieraServiceImpl(
             CuentaFinancieraRepository cuentaRepository,
             TransaccionRepository transaccionRepository,
-            ClienteRepository clienteRepository) {
+            ClienteRepository clienteRepository,
+            ConfiguracionService configuracionService) {
 
         this.cuentaRepository = cuentaRepository;
         this.transaccionRepository = transaccionRepository;
         this.clienteRepository = clienteRepository;
+        this.configuracionService = configuracionService;
     }
 
     /**
@@ -359,6 +370,11 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
             );
         }
 
+        validarLimiteDiarioExtraccion(
+                operador,
+                monto
+        );
+
         cuenta.setSaldoOperativo(
                 cuenta.getSaldoOperativo().subtract(monto)
         );
@@ -386,7 +402,72 @@ public class CuentaFinancieraServiceImpl implements CuentaFinancieraService {
 
         return cuentaGuardada;
     }
+    /**
+     * Verifica que una extracción no supere el límite diario acumulado
+     * correspondiente al operador.
+     *
+     * <p>
+     * El límite se calcula por operador y no por cuenta, por lo que se
+     * consideran todas las extracciones completadas realizadas por el
+     * mismo cliente durante el día actual.
+     * </p>
+     *
+     * <p>
+     * Los titulares y adherentes utilizan parámetros independientes
+     * obtenidos dinámicamente desde la configuración general.
+     * </p>
+     *
+     * @param operador cliente que realiza la extracción
+     * @param monto monto de la nueva extracción
+     * @throws IllegalStateException si la operación supera el límite diario
+     */
+    private void validarLimiteDiarioExtraccion(
+            Cliente operador,
+            BigDecimal monto) {
 
+        boolean esAdherente =
+                operador.getTitular() != null;
+
+        String claveLimite = esAdherente
+                ? ClavesConfiguracion.LIMITE_EXTRACCION_ADHERENTE
+                : ClavesConfiguracion.LIMITE_EXTRACCION_TITULAR;
+
+        BigDecimal limiteDiario =
+                configuracionService.obtenerValorDecimal(
+                        claveLimite
+                );
+
+        LocalDate hoy = LocalDate.now();
+
+        LocalDateTime inicioDia =
+                hoy.atStartOfDay();
+
+        LocalDateTime inicioDiaSiguiente =
+                hoy.plusDays(1).atStartOfDay();
+
+        BigDecimal acumulado =
+                transaccionRepository
+                        .sumarMontoPorOperadorTipoEstadoYPeriodo(
+                                operador.getId(),
+                                TipoTransaccion.EXTRACCION,
+                                EstadoTransaccion.COMPLETADA,
+                                inicioDia,
+                                inicioDiaSiguiente
+                        );
+
+        if (acumulado == null) {
+            acumulado = BigDecimal.ZERO;
+        }
+
+        BigDecimal totalLuegoDeExtraccion =
+                acumulado.add(monto);
+
+        if (totalLuegoDeExtraccion.compareTo(limiteDiario) > 0) {
+            throw new IllegalStateException(
+                    "La extracción supera el límite diario permitido"
+            );
+        }
+    }
     /**
      * Verifica que el cliente que intenta realizar una extracción
      * esté autorizado para operar sobre la cuenta indicada.
